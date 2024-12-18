@@ -108,11 +108,12 @@ async function getMetrics(){
     console.log("\n------------------ Lista de Nós --------------------\n");
     
     //sorting by proposedBlockCount descending and organization ascending
-    result.sort((a, b) => {   
-        if (a.organization !== b.organization) {
-            return a.organization.localeCompare(b.name); 
+    result.sort((a, b) => {
+        let comp = b.proposedBlockCount - a.proposedBlockCount;
+        if(comp == 0) {
+            comp = a.organization.localeCompare(b.organization);
         }
-        return b.proposedBlockCount - a.proposedBlockCount; 
+        return comp;
     });
 
     //printing as table
