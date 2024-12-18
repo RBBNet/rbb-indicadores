@@ -1,10 +1,8 @@
-import axios from 'axios';
-import { ethers } from 'ethers';
-
-const helpers = await import('./helpers.js');
-const nodeFunctions = await import('./nodeFunctions.js');
-const dateHelpers = await import('./dateHelpers.js');
-
+const axios = require('axios');
+const ethers = require('ethers');
+const helpers = require('./helpers.js');
+const nodeFunctions = require('./nodeFunctions.js');
+const dateHelpers = require('./dateHelpers.js');
 
 async function getMetrics(){
     //obtendo parametros
@@ -126,4 +124,3 @@ async function getMetrics(){
 }
 
 getMetrics();
-

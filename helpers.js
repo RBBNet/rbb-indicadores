@@ -1,6 +1,4 @@
 const fs = require('fs');
-const net = require('net');
-const path = require('path');
 
 function lerArquivo(nomeArquivo) {
     try {
@@ -11,7 +9,6 @@ function lerArquivo(nomeArquivo) {
         return null;
     }
 }
-
 
 module.exports = {
     lerArquivo:lerArquivo,

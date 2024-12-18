@@ -1,5 +1,3 @@
-const fs = require('fs');
-const net = require('net');
 const path = require('path');
 
 const piloto = require(path.join('../', 'nodes_piloto.json'));
@@ -46,7 +44,6 @@ async function translateMetrics(metricas, idMap) {
         return e.message;
     }
 }
-
 
 module.exports = {
     mapNodes: mapNodes,

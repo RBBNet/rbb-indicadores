@@ -1,18 +1,9 @@
-const input = require('readline');
-const {isToday, addDays} = require("date-fns");
+const {addDays} = require("date-fns");
 const EthDater = require("ethereum-block-by-date");
 
 async function gets_block_number_by_date(date, provider) {
-    const dater = new EthDater(
-        provider
-    );
-
-    let block = await dater.getDate(
-        date,
-        true,
-        false
-    );
-
+    const dater = new EthDater(provider);
+    let block = await dater.getDate(date, true, false);
     return block.block;
 }
 
@@ -50,24 +41,9 @@ function validate_date(date){
     return !(date > today);
 }
 
-const question = question => {
-    const rl = input.createInterface({
-        input: process.stdin,
-        output: process.stdout
-    });
-
-    return new Promise(resolve => {
-        rl.question(question, answer => {
-            rl.close();
-            return resolve(answer);
-        });
-    });
-};
-
 module.exports = {
     string_to_date: string_to_date,
     validate_date: validate_date,
-    question: question,
     update_date_last: update_date_last,
     gets_block_number_by_date: gets_block_number_by_date
 };
