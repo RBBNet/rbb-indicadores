@@ -31,7 +31,7 @@ function string_to_date(dateString) {
     // meia-noite no horário de Brasília (UTC-3). UTC-3 é +3 em UTC
     let date = new Date(Date.UTC(year, month, day, 3, 0, 0, 0));
 
-    date.setUTCHours(date.getUTCHours() - date.getTimezoneOffset() / 60);
+    //date.setUTCHours(date.getUTCHours() - date.getTimezoneOffset() / 60);
 
     return date;
 }
