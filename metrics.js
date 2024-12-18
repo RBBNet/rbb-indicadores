@@ -2,7 +2,6 @@ const axios = require('axios');
 const ethers = require('ethers');
 const helpers = require('./helpers.js');
 const nodeFunctions = require('./nodeFunctions.js');
-const dateHelpers = require('./dateHelpers.js');
 
 async function getMetrics(){
     //obtendo parametros
@@ -16,13 +15,13 @@ async function getMetrics(){
         const provider = new ethers.JsonRpcProvider(json_rpc_address);
     
         //validando datas de inicio e fim
-        date_first = dateHelpers.string_to_date(date_first);
-        if (dateHelpers.validate_date(date_first) === false) {
+        date_first = helpers.string_to_date(date_first);
+        if (helpers.validate_date(date_first) === false) {
             throw new Error("Por favor, insira uma data válida. O formato esperado é DD/MM/AAAA");
         } 
     
-        date_last = dateHelpers.string_to_date(date_last);
-        if (dateHelpers.validate_date(date_last) === false) {
+        date_last = helpers.string_to_date(date_last);
+        if (helpers.validate_date(date_last) === false) {
             throw new Error("Por favor, insira uma data válida. O formato esperado é DD/MM/AAAA");
         } 
     
@@ -30,13 +29,13 @@ async function getMetrics(){
             throw new Error("Por favor, insira uma data final que seja após a primeira data.");
         }
 
-        date_last = dateHelpers.update_date_last(date_last);
+        date_last = helpers.update_date_last(date_last);
 
         console.log("\n------------------ Obtendo Informações para o seguinte período --------------------\n");
         console.log(`\tINICIO: ${date_first} \n\tFIM: ${date_last}\n`);
 
-        first_block_number = await dateHelpers.gets_block_number_by_date(date_first, provider);
-        last_block_number = (await dateHelpers.gets_block_number_by_date(date_last, provider));
+        first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
+        last_block_number = (await helpers.gets_block_number_by_date(date_last, provider));
 
         console.log("\n------------------ Número de Blocos Obtidos --------------------\n");
         console.log(`\t| ${first_block_number} || ${date_first} | \n\t| ${last_block_number} || ${date_last} |`);

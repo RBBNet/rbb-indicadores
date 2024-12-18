@@ -1,8 +1,8 @@
 const path = require('path');
+const helpers = require(path.join(__dirname, "helpers.js"));
 
 const piloto = require(path.join('../', 'nodes_piloto.json'));
 const lab = require(path.join('../', 'nodes_lab.json'));
-const helpers = require(path.join(__dirname, "helpers.js"));
 
 function mapNodes(orgs, net, pubKeyMap, idMap) {
     for (let i = 0; i < orgs.length; i++){
