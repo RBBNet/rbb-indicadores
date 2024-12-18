@@ -17,11 +17,20 @@ async function blockProductionMetrics(url, first_block_number, last_block_number
 
 async function getMetrics(){
     //obtendo parametros
-    let date_first = process.argv[2];
-    let date_last = process.argv[3];
-    let json_rpc_address = process.argv[4];
     let first_block_number, last_block_number;
-
+    let date_first, date_last;
+    let json_rpc_address;
+   
+    if(process.argv.length >=5){
+        date_first = process.argv[2];
+        date_last = process.argv[3];
+        json_rpc_address = process.argv[4];    
+    }
+    else{
+        console.error('Não foram passados parâmetros suficientes para a execução desse script \nInsira conforme o exemplo: node metrics.js DD/MM/AAAA DD/MM/AAAA http://localhost:8545\n');
+        throw new Error('Parâmetros Insuficientes');
+    }
+    
     let provider;
     try{
         //estabelecendo conexão com a rede
@@ -55,9 +64,11 @@ async function getMetrics(){
 
     date_last = helpers.update_date_last(date_last);
 
-    console.log(`Data inicial:      ${date_first}`);
-    console.log(`Data final:        ${date_last}`);
+    
 
+    console.log(`Data inicial: ${date_first.getDate()}/${date_first.getMonth()}/${date_first.getFullYear()}  ${date_first.getHours()}:${date_first.getMinutes()}:${date_first.getSeconds()} `);
+    console.log(`Data final: ${date_last.getDate()}/${date_last.getMonth()}/${date_last.getFullYear()}  ${date_last.getHours()}:${date_last.getMinutes()}:${date_last.getSeconds()} `);
+    
     first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
     last_block_number = (await helpers.gets_block_number_by_date(date_last, provider));
 
@@ -75,7 +86,7 @@ async function getMetrics(){
 
     let blocksProducedREAL = last_block_number-first_block_number+1;
     
-    //obtendo valor em ms e passando para segundos
+    //converting date from milisseconds to seconds
     let date_first_seconds = date_first.valueOf()/1000;    
     let date_last_seconds = date_last.valueOf()/1000;
     let blocksProducedIDEAL = parseInt((date_last_seconds - date_first_seconds + 1)/4)
