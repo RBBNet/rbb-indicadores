@@ -1,5 +1,4 @@
 const path = require('path');
-const helpers = require(path.join(__dirname, "helpers.js"));
 
 function mapNodes(orgs, net, pubKeyMap, idMap) {
     for (let i = 0; i < orgs.length; i++){
