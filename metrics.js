@@ -3,6 +3,25 @@ const ethers = require('ethers');
 const helpers = require('./helpers.js');
 const nodeFunctions = require('./nodeFunctions.js');
 
+async function blockProductionMetrics(first_block_number, last_block_number, nodesByIdMap) {
+    try {
+        let url = 'http://localhost:8545';
+        const response = await axios.post(url, {
+            jsonrpc: "2.0",
+            method: "qbft_getSignerMetrics",
+            params: [`${first_block_number}`, `${last_block_number}`],
+            id: 1
+        });
+
+        const metrics = response.data.result;
+        let responseBody = await nodeFunctions.translateMetrics(metrics, nodesByIdMap);
+        return responseBody;
+    } catch (e) {
+        console.log(e);
+        throw e; // Re-throw the error for the caller to handle
+    }
+}
+
 async function getMetrics(){
     //obtendo parametros
     let date_first = process.argv[2];
@@ -63,26 +82,8 @@ async function getMetrics(){
     nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByPubKeyMap, nodesByIdMap);
 
     console.log('\nObtendo Métricas de Produção de Blocos...');
-    let blockProductionMetrics = async () => {
-        try {
-            let url = 'http://localhost:8545';
-            const response = await axios.post(url, {
-                jsonrpc: "2.0",
-                method: "qbft_getSignerMetrics",
-                params: [`${first_block_number}`, `${last_block_number}`],
-                id: 1
-            });
 
-            const metrics = response.data.result;
-            let responseBody = await nodeFunctions.translateMetrics(metrics, nodesByIdMap);
-            return responseBody;
-        } catch (e) {
-            console.log(e);
-            throw e; // Re-throw the error for the caller to handle
-        }
-    };
-
-    const result = await blockProductionMetrics();
+    const result = await blockProductionMetrics(first_block_number, last_block_number, nodesByIdMap);
 
     console.log("\n------------------ Métricas --------------------\n");
 
