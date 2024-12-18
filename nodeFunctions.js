@@ -17,28 +17,23 @@ function mapNodes(orgs, net, pubKeyMap, idMap) {
 }
 
 async function translateMetrics(metricas, idMap) {
-    try{
-        let responseBody = []
-        for (let i = 0; i < metricas.length; i++) {
-            let body = {}
-            let node = idMap.get(metricas[i].address);
-            if (node !== null){
-                body.organization = node.organization;
-                body.node = node.name;
-            } else {
-                body.organization = "Unknown";
-                body.node = "Unknown";
-            }
-
-            body.proposedBlockCount = parseInt(metricas[i].proposedBlockCount);
-            body.lastProposedBlockNumber = parseInt(metricas[i].lastProposedBlockNumber);
-            responseBody.push(body);
+    let responseBody = []
+    for (let i = 0; i < metricas.length; i++) {
+        let body = {}
+        let node = idMap.get(metricas[i].address);
+        if (node !== null){
+            body.organization = node.organization;
+            body.node = node.name;
+        } else {
+            body.organization = "Unknown";
+            body.node = "Unknown";
         }
-        return responseBody;
 
-    } catch (e) {
-        return e.message;
+        body.proposedBlockCount = parseInt(metricas[i].proposedBlockCount);
+        body.lastProposedBlockNumber = parseInt(metricas[i].lastProposedBlockNumber);
+        responseBody.push(body);
     }
+    return responseBody;
 }
 
 module.exports = {
