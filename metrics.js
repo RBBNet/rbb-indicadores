@@ -50,14 +50,14 @@ async function getMetrics(){
 
         date_last = helpers.update_date_last(date_last);
 
-        console.log("\n------------------ Obtendo Informações para o seguinte período --------------------\n");
-        console.log(`\tINICIO: ${date_first} \n\tFIM: ${date_last}\n`);
+        console.log(`Data inicial:      ${date_first}`);
+        console.log(`Data final:        ${date_last}`);
 
         first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
         last_block_number = (await helpers.gets_block_number_by_date(date_last, provider));
 
-        console.log("\n------------------ Número de Blocos Obtidos --------------------\n");
-        console.log(`\t| ${first_block_number} || ${date_first} | \n\t| ${last_block_number} || ${date_last} |`);
+        console.log(`Bloco inicial:     ${first_block_number}`);
+        console.log(`Bloco final:       ${last_block_number}`);
  
     } catch (e) {
         console.log("Erro na execução do script. ");
@@ -73,7 +73,6 @@ async function getMetrics(){
         }
     }
 
-    console.log('\nCarregando dados dos nós...');
     const nodesJsonPiloto = helpers.lerArquivo('../nodes_piloto.json');
     const nodesJsonLab = helpers.lerArquivo('../nodes_lab.json');
     const nodesByPubKeyMap = new Map();
@@ -81,11 +80,7 @@ async function getMetrics(){
     nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByPubKeyMap, nodesByIdMap);
     nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByPubKeyMap, nodesByIdMap);
 
-    console.log('\nObtendo Métricas de Produção de Blocos...');
-
     const result = await blockProductionMetrics(first_block_number, last_block_number, nodesByIdMap);
-
-    console.log("\n------------------ Métricas --------------------\n");
 
     let blocksProducedREAL = last_block_number-first_block_number+1;
     
@@ -95,18 +90,10 @@ async function getMetrics(){
     let blocksProducedIDEAL = parseInt((date_last_seconds - date_first_seconds + 1)/4)
     let blocksProductionRate = blocksProducedREAL/blocksProducedIDEAL;
 
-    console.log(`Blocos Produzidos de fato: ${blocksProducedREAL}`);
-    console.log(`Blocos Produzidos ideal: ${blocksProducedIDEAL}\n`);
-    console.log(`Taxa de Produção de Blocos: ${blocksProductionRate.toFixed(2)*100}%`);
+    console.log(`Blocos produzidos: ${blocksProducedREAL}`);
+    console.log(`Qtd máx ideal:     ${blocksProducedIDEAL}`);
+    console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)*100}%`);
 
-    let productionAvgIdeal = blocksProducedIDEAL/result.length;
-    let productionAvgREAL = blocksProducedREAL/result.length;
-    let individualProductionRate = (productionAvgIdeal + productionAvgREAL)/2;
-
-    console.log(`Taxa Individual de Produção de Blocos no período: ${individualProductionRate.toFixed(0)}`);
-
-    console.log("\n------------------ Lista de Nós --------------------\n");
-    
     //sorting by proposedBlockCount descending and organization ascending
     result.sort((a, b) => {
         let comp = b.proposedBlockCount - a.proposedBlockCount;
@@ -118,10 +105,9 @@ async function getMetrics(){
 
     //printing as table
     console.table(result.map(node => ({
-        organization: node.organization,
-        proposedBlockCount: node.proposedBlockCount
+        'Organização': node.organization,
+        'Blocos produzidos': node.proposedBlockCount
     })));
-  
 }
 
 getMetrics();
