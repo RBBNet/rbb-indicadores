@@ -3,17 +3,15 @@ const ethers = require('ethers');
 const helpers = require('./helpers.js');
 const nodeFunctions = require('./nodeFunctions.js');
 
-async function blockProductionMetrics(first_block_number, last_block_number, nodesByIdMap) {
-    let url = 'http://localhost:8545';
+async function blockProductionMetrics(url, first_block_number, last_block_number, nodesByIdMap) {
     const response = await axios.post(url, {
         jsonrpc: "2.0",
         method: "qbft_getSignerMetrics",
         params: [`${first_block_number}`, `${last_block_number}`],
         id: 1
     });
-
     const metrics = response.data.result;
-    let responseBody = await nodeFunctions.translateMetrics(metrics, nodesByIdMap);
+    const responseBody = await nodeFunctions.translateMetrics(metrics, nodesByIdMap);
     return responseBody;
 }
 
@@ -73,7 +71,7 @@ async function getMetrics(){
     nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByPubKeyMap, nodesByIdMap);
     nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByPubKeyMap, nodesByIdMap);
 
-    const result = await blockProductionMetrics(first_block_number, last_block_number, nodesByIdMap);
+    const result = await blockProductionMetrics(json_rpc_address, first_block_number, last_block_number, nodesByIdMap);
 
     let blocksProducedREAL = last_block_number-first_block_number+1;
     
