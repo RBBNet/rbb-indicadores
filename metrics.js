@@ -104,12 +104,29 @@ async function getMetrics(){
         }
         return comp;
     });
-
+    
     //printing as table
-    console.table(result.map(node => ({
+    filteredResults = result.map(node => ({
         'Organização': node.organization,
         'Blocos produzidos': node.proposedBlockCount
-    })));
+    }));
+
+    console.table(filteredResults);
+
+    file_header = 
+`Data inicial,${date_first.getDate()}/${date_first.getMonth()}/${date_first.getFullYear()}
+Data final,${date_last.getDate()}/${date_last.getMonth()}/${date_last.getFullYear()}
+Bloco inicial,${first_block_number}
+Bloco final,${last_block_number}
+Blocos produzidos,${blocksProducedREAL}
+Qtd máx ideal,${blocksProducedIDEAL}
+Rendimento,${blocksProductionRate.toFixed(2)}
+
+Organização,Blocos Produzidos\n`;
+
+    helpers.write_csv(file_header,filteredResults);
+
+
 }
 
 getMetrics();
