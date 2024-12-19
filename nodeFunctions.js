@@ -1,14 +1,9 @@
-const path = require('path');
-
-function mapNodes(orgs, net, pubKeyMap, idMap) {
+function mapNodes(orgs, net, idMap) {
     for (let i = 0; i < orgs.length; i++){
         for (let j = 0; j < orgs[i].nodes.length; j++){
             const node = Object.assign({}, orgs[i].nodes[j]);
             node.organization = orgs[i].organization;
             node.net = net;
-            if(node.pubKey) {
-                pubKeyMap.set(node.pubKey, node);
-            }
             if(node.id) {
                 idMap.set(node.id, node);
             }
