@@ -24,7 +24,7 @@ async function getMetrics(){
     if(process.argv.length >=5){
         date_first = process.argv[2];
         date_last = process.argv[3];
-        json_rpc_address = process.argv[4];    
+        json_rpc_address = process.argv[4]; 
     }
     else{
         console.error('Não foram passados parâmetros suficientes para a execução desse script \nInsira conforme o exemplo: node metrics.js DD/MM/AAAA DD/MM/AAAA http://localhost:8545\n');
@@ -74,16 +74,22 @@ async function getMetrics(){
 
     console.log(`Bloco inicial:     ${first_block_number}`);
     console.log(`Bloco final:       ${last_block_number}`);
- 
-    const nodesJsonPiloto = helpers.lerArquivo('../nodes_piloto.json');
-    const nodesJsonLab = helpers.lerArquivo('../nodes_lab.json');
-    const nodesByPubKeyMap = new Map();
+    
+    let nodesJsonPiloto, nodesJsonLab;
     const nodesByIdMap = new Map();
-    nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByPubKeyMap, nodesByIdMap);
-    nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByPubKeyMap, nodesByIdMap);
 
+    if(process.argv[5] == 'lab'){
+        nodesJsonLab = helpers.lerArquivo(`${process.argv[6]}`);
+        nodeFunctions.mapNodes(nodesJsonLab, process.argv[5], nodesByIdMap);
+    } else if(process.argv[5] == 'piloto'){
+        nodesJsonPiloto = helpers.lerArquivo(`${process.argv[6]}`);
+        nodeFunctions.mapNodes(nodesJsonPiloto, process.argv[5], nodesByIdMap);
+    } else{
+        console.error('Não foram passados parâmetros suficientes para a execução desse script \nInsira conforme o exemplo: node metrics.js DD/MM/AAAA DD/MM/AAAA http://localhost:8545 <lab/piloto> <nodes.json path>\n');
+        throw new Error('Parâmetros Insuficientes');
+    }
+    
     const result = await blockProductionMetrics(json_rpc_address, first_block_number, last_block_number, nodesByIdMap);
-
     let blocksProducedREAL = last_block_number-first_block_number+1;
     
     //converting date from milisseconds to seconds
