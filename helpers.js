@@ -31,16 +31,16 @@ function string_to_date(dateString) {
     let year = parseInt(parts[2], 10);
 
     // meia-noite no horário de Brasília (UTC-3). UTC-3 é +3 em UTC
+    //-1000ms para buscar até as 23:59:59 da data solicitada
     let date = new Date(Date.UTC(year, month, day, 3, 0, 0, 0));
-
-    //date.setUTCHours(date.getUTCHours() - date.getTimezoneOffset() / 60);
-
+    
     return date;
 }
 
 function update_date_last(date_last){
     date_last = addDays(date_last, 1);
-    return date_last;
+   
+    return  new Date(date_last.valueOf()-1000);
 }
 
 function validate_date(date){

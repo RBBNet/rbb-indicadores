@@ -66,8 +66,8 @@ async function getMetrics(){
 
     
 
-    console.log(`Data inicial: ${date_first.getDate()}/${date_first.getMonth()}/${date_first.getFullYear()}  ${date_first.getHours()}:${date_first.getMinutes()}:${date_first.getSeconds()} `);
-    console.log(`Data final: ${date_last.getDate()}/${date_last.getMonth()}/${date_last.getFullYear()}  ${date_last.getHours()}:${date_last.getMinutes()}:${date_last.getSeconds()} `);
+    console.log(`Data inicial: ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}  ${date_first.getHours()}:${date_first.getMinutes()}:${date_first.getSeconds()} `);
+    console.log(`Data final: ${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()}  ${date_last.getHours()}:${date_last.getMinutes()}:${date_last.getSeconds()} `);
     
     first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
     last_block_number = (await helpers.gets_block_number_by_date(date_last, provider));
@@ -114,8 +114,8 @@ async function getMetrics(){
     console.table(filteredResults);
 
     file_header = 
-`Data inicial,${date_first.getDate()}/${date_first.getMonth()}/${date_first.getFullYear()}
-Data final,${date_last.getDate()}/${date_last.getMonth()}/${date_last.getFullYear()}
+`Data inicial,${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}
+Data final,${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()}
 Bloco inicial,${first_block_number}
 Bloco final,${last_block_number}
 Blocos produzidos,${blocksProducedREAL}
