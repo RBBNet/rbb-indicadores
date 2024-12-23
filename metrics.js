@@ -16,6 +16,15 @@ async function blockProductionMetrics(url, first_block_number, last_block_number
     return responseBody;
 }
 
+function mapNodes(nodesByIdMap, nodes_json_folder_path, rede) {
+    const arquivo = nodes_json_folder_path + '/nodes_' + rede + '.json';
+    if (fs.existsSync(arquivo)) {     
+        nodesJsonLab = helpers.lerArquivo(arquivo);
+        nodeFunctions.mapNodes(nodesJsonLab, rede, nodesByIdMap);
+        console.log(` - ${rede}: ${arquivo}`);
+    } 
+}
+
 async function getMetrics(){
     //obtendo parametros
     let first_block_number, last_block_number;
@@ -80,20 +89,9 @@ async function getMetrics(){
 
     console.log("Carregando arquivos node.json:");
 
-    if (fs.existsSync(nodes_json_folder_path) && fs.lstatSync(nodes_json_folder_path).isDirectory()) {
-        const arqLab = nodes_json_folder_path+'/nodes_lab.json';
-        if (fs.existsSync(arqLab)) {     
-            nodesJsonLab = helpers.lerArquivo(arqLab);
-            nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByIdMap);
-            console.log(` - Lab:    ${arqLab}`);
-        } 
-        
-        const arqPiloto = nodes_json_folder_path+'/nodes_lab.json';
-        if (fs.existsSync(arqPiloto)) {
-            nodesJsonPiloto = helpers.lerArquivo(arqPiloto);
-            nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByIdMap);
-            console.log(` - Piloto: ${arqPiloto}`);
-        } 
+    if(fs.existsSync(nodes_json_folder_path) && fs.lstatSync(nodes_json_folder_path).isDirectory()) {
+        mapNodes(nodesByIdMap, nodes_json_folder_path, 'lab');
+        mapNodes(nodesByIdMap, nodes_json_folder_path, 'piloto');
     } 
     else {
         console.error('O parâmetro passado para os arquivos de metadados deve ser uma pasta');
