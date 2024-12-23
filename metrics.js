@@ -23,16 +23,15 @@ async function getMetrics(){
     let json_rpc_address;
     let nodes_json_folder_path;
 
-    if(process.argv.length >=5){
-        date_first = process.argv[2];
-        date_last = process.argv[3];
-        json_rpc_address = process.argv[4];
-        nodes_json_folder_path = process.argv[5]; 
+    if(process.argv.length != 6){
+        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node metrics.js <data-inicial> <data-final> <url-json-rpc> <caminho-nodes-json>\n');
+        return;
     }
-    else{
-        console.error('Não foram passados parâmetros suficientes para a execução desse script \nInsira conforme o exemplo: node metrics.js DD/MM/AAAA DD/MM/AAAA http://localhost:8545\n');
-        throw new Error('Parâmetros Insuficientes');
-    }
+    
+    date_first = process.argv[2];
+    date_last = process.argv[3];
+    json_rpc_address = process.argv[4];
+    nodes_json_folder_path = process.argv[5]; 
     
     let provider;
     try{
@@ -66,7 +65,6 @@ async function getMetrics(){
     }
 
     date_last = helpers.update_date_last(date_last);
-
     
     console.log(`Data inicial:      ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}`);
     console.log(`Data final:        ${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()} `);
@@ -80,27 +78,26 @@ async function getMetrics(){
     let nodesJsonPiloto, nodesJsonLab;
     const nodesByIdMap = new Map();
 
-    try{
-        console.log("Acessando arquivo de configuração:");
+    console.log("Carregando arquivos node.json:");
 
-        if (fs.lstatSync(nodes_json_folder_path).isDirectory()) {
-            if (fs.existsSync(nodes_json_folder_path+'/nodes_lab.json')) {     
-                nodesJsonLab = helpers.lerArquivo(nodes_json_folder_path+'/nodes_lab.json');
-                nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByIdMap);
-                console.log(' - LAB');
-            } 
-            
-            if (fs.existsSync(nodes_json_folder_path+'/nodes_piloto.json')) {
-                nodesJsonPiloto = helpers.lerArquivo(nodes_json_folder_path+'/nodes_piloto.json');
-                nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByIdMap);
-                console.log(' - PILOTO');
-            } 
-            
+    if (fs.existsSync(nodes_json_folder_path) && fs.lstatSync(nodes_json_folder_path).isDirectory()) {
+        const arqLab = nodes_json_folder_path+'/nodes_lab.json';
+        if (fs.existsSync(arqLab)) {     
+            nodesJsonLab = helpers.lerArquivo(arqLab);
+            nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByIdMap);
+            console.log(` - Lab:    ${arqLab}`);
         } 
-    }
-    catch(err){
+        
+        const arqPiloto = nodes_json_folder_path+'/nodes_lab.json';
+        if (fs.existsSync(arqPiloto)) {
+            nodesJsonPiloto = helpers.lerArquivo(arqPiloto);
+            nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByIdMap);
+            console.log(` - Piloto: ${arqPiloto}`);
+        } 
+    } 
+    else {
         console.error('O parâmetro passado para os arquivos de metadados deve ser uma pasta');
-        throw new Error('Parâmetros Incorretos');
+        return;
     }
 
     const result = await blockProductionMetrics(json_rpc_address, first_block_number, last_block_number, nodesByIdMap);
@@ -145,8 +142,6 @@ Rendimento;${blocksProductionRate.toFixed(2)}
 Organização;Blocos Produzidos\n`;
 
     helpers.write_csv(file_header,filteredResults);
-
-
 }
 
 getMetrics();
