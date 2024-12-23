@@ -134,15 +134,15 @@ async function getMetrics(){
     console.table(filteredResults);
 
     file_header = 
-`Data inicial,${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}
-Data final,${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()}
-Bloco inicial,${first_block_number}
-Bloco final,${last_block_number}
-Blocos produzidos,${blocksProducedREAL}
-Qtd máx ideal,${blocksProducedIDEAL}
-Rendimento,${blocksProductionRate.toFixed(2)}
+`Data inicial;${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}
+Data final;${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()}
+Bloco inicial;${first_block_number}
+Bloco final;${last_block_number}
+Blocos produzidos;${blocksProducedREAL}
+Qtd máx ideal;${blocksProducedIDEAL}
+Rendimento;${blocksProductionRate.toFixed(2)}
 
-Organização,Blocos Produzidos\n`;
+Organização;Blocos Produzidos\n`;
 
     helpers.write_csv(file_header,filteredResults);
 

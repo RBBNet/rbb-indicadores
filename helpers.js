@@ -1,8 +1,7 @@
 const fs = require('fs');
 const {addDays} = require('date-fns');
 const EthDater = require('ethereum-block-by-date');
-const { writeFile } = require('fs/promises');
-const createCsvWriter = require('csv-writer').createObjectCsvWriter;
+const { stringify } = require('csv-stringify');
 
 function lerArquivo(nomeArquivo) {
     try {
@@ -54,25 +53,19 @@ function validate_date(date){
     return !(date > today);
 }
 
-function write_csv(file_header, data){
+function write_csv(header, data) {
     path = 'IndiceProducaoBlocos.csv';
-    
-    writeFile(path,file_header,(err => console.error('Erro ao gerar head do arquivo CSV', err)));
-    
-    const csvWriter = createCsvWriter({
-        path: path,
-        header: [
-            { id: 'Organização', title: 'Organizacao' },
-            { id: 'Blocos produzidos', title: 'Blocos produzidos' }
-        ],
-        append: true
+   
+    fs.writeFileSync(path, header, 'utf-8', (err) => {
+        if (err) console.error('Erro ao escrever o cabeçalho', err);
     });
 
-    csvWriter
-        .writeRecords(data)
-        .then(() => console.log('Arquivo CSV gerado com sucesso'))
-        .catch(err => console.error('Erro ao gerar arquivo CSV', err));
+    const csvStream = stringify(data, { delimiter: ';' });
+    csvStream.pipe(fs.createWriteStream(path, { flags: 'a'}))
+        .on('finish', () => console.log('Arquivo CSV gerado com sucesso'))
+        .on('error', (err) => console.error('Erro ao gerar o arquivo CSV', err));
 }
+
 
 module.exports = {
     string_to_date: string_to_date,

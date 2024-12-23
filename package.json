@@ -9,6 +9,6 @@
     "path": "^0.12.7",
     "date-fns": "^3.6.0",
     "ethereum-block-by-date": "^1.5.0",
-    "csv-writer": "^1.6.0"
+    "csv-stringify":"^6.5.2"
   }
 }
