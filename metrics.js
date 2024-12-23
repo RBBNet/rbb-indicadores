@@ -134,10 +134,10 @@ Data final;${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullY
 Bloco inicial;${first_block_number}
 Bloco final;${last_block_number}
 Blocos produzidos;${blocksProducedREAL}
-Qtd máx ideal;${blocksProducedIDEAL}
-Rendimento;${blocksProductionRate.toFixed(2)}
+Qtd max ideal;${blocksProducedIDEAL}
+Rendimento;${(blocksProductionRate.toFixed(2)).replace('.',',')}
 
-Organização;Blocos Produzidos\n`;
+Organizacao;Blocos Produzidos\n`;
 
     helpers.write_csv(file_header,filteredResults);
 }
