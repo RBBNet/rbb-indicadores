@@ -16,7 +16,7 @@ npm install
 ## Utilização
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 ```bash
-node metrics.js <data inicial> <data final> <provider> <nome da rede> <endereço_do_nodes.json>
+node block-metrics.js <data inicial> <data final> <provider> <nome da rede> <endereço_do_nodes.json>
 ```
 Onde:
 - `<data inicial>` e `<data final>` determinam o período de tempo a ser analizado. Sendo necessariamente, a `<data inicial>` anterior a `<data final>`
@@ -30,7 +30,7 @@ Onde:
 
 Dessa forma, uma possível execução dessa ferramenta seria:
 ```bash
-node metrics.js 27/11/2024 11/12/2024 http://localhost:8545 piloto ../nodesFolder
+node block-metrics.js 27/11/2024 11/12/2024 http://localhost:8545 piloto ../nodesFolder
 ```
 
 A qual retornaria, por exemplo:

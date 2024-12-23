@@ -33,7 +33,7 @@ async function getMetrics(){
     let nodes_json_folder_path;
 
     if(process.argv.length != 6){
-        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node metrics.js <data-inicial> <data-final> <url-json-rpc> <caminho-nodes-json>\n');
+        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node block-metrics.js <data-inicial> <data-final> <url-json-rpc> <caminho-nodes-json>\n');
         return;
     }
     
