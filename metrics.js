@@ -2,6 +2,7 @@ const axios = require('axios');
 const ethers = require('ethers');
 const helpers = require('./helpers.js');
 const nodeFunctions = require('./nodeFunctions.js');
+const fs = require("fs");
 
 async function blockProductionMetrics(url, first_block_number, last_block_number, nodesByIdMap) {
     const response = await axios.post(url, {
@@ -20,11 +21,13 @@ async function getMetrics(){
     let first_block_number, last_block_number;
     let date_first, date_last;
     let json_rpc_address;
-   
+    let nodes_json_folder_path;
+
     if(process.argv.length >=5){
         date_first = process.argv[2];
         date_last = process.argv[3];
-        json_rpc_address = process.argv[4]; 
+        json_rpc_address = process.argv[4];
+        nodes_json_folder_path = process.argv[5]; 
     }
     else{
         console.error('Não foram passados parâmetros suficientes para a execução desse script \nInsira conforme o exemplo: node metrics.js DD/MM/AAAA DD/MM/AAAA http://localhost:8545\n');
@@ -78,17 +81,27 @@ async function getMetrics(){
     let nodesJsonPiloto, nodesJsonLab;
     const nodesByIdMap = new Map();
 
-    if(process.argv[5] == 'lab'){
-        nodesJsonLab = helpers.lerArquivo(`${process.argv[6]}`);
-        nodeFunctions.mapNodes(nodesJsonLab, process.argv[5], nodesByIdMap);
-    } else if(process.argv[5] == 'piloto'){
-        nodesJsonPiloto = helpers.lerArquivo(`${process.argv[6]}`);
-        nodeFunctions.mapNodes(nodesJsonPiloto, process.argv[5], nodesByIdMap);
-    } else{
-        console.error('Não foram passados parâmetros suficientes para a execução desse script \nInsira conforme o exemplo: node metrics.js DD/MM/AAAA DD/MM/AAAA http://localhost:8545 <lab/piloto> <nodes.json path>\n');
-        throw new Error('Parâmetros Insuficientes');
+    try{
+        if (fs.lstatSync(nodes_json_folder_path).isDirectory()) {
+            if (fs.existsSync(nodes_json_folder_path+'/nodes_lab.json')) {
+                console.log("Acessando arquivo de configuração: ");
+                nodesJsonLab = helpers.lerArquivo(nodes_json_folder_path+'/nodes_lab.json');
+                nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByIdMap);
+            } 
+            
+            if (fs.existsSync(nodes_json_folder_path+'/nodes_piloto.json')) {
+                console.log("Você está consultando a rede piloto");
+                nodesJsonPiloto = helpers.lerArquivo(nodes_json_folder_path+'/nodes_piloto.json');
+                nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByIdMap);
+            } 
+            
+        } 
     }
-    
+    catch(err){
+        console.error('O parâmetro passado para os arquivos de metadados deve ser uma pasta');
+        throw new Error('Parâmetros Incorretos');
+    }
+
     const result = await blockProductionMetrics(json_rpc_address, first_block_number, last_block_number, nodesByIdMap);
     let blocksProducedREAL = last_block_number-first_block_number+1;
     

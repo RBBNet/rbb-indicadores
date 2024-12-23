@@ -17,8 +17,14 @@ async function translateMetrics(metricas, idMap) {
         let body = {}
         let node = idMap.get(metricas[i].address);
         if (node !== null){
-            body.organization = node.organization;
-            body.node = node.name;
+            try{
+                body.organization = node.organization;
+                body.node = node.name;
+            }
+            catch(err){
+                body.organization = "Unknown";
+                body.node = "Unknown";
+            }
         } else {
             body.organization = "Unknown";
             body.node = "Unknown";
