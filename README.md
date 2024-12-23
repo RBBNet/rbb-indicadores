@@ -30,7 +30,7 @@ Onde:
 
 Dessa forma, uma possível execução dessa ferramenta seria:
 ```bash
-node metrics.js 27/11/2024 11/12/2024 http://localhost:8545 piloto ./nodes.json
+node metrics.js 27/11/2024 11/12/2024 http://localhost:8545 piloto ../nodesFolder
 ```
 
 A qual retornaria, por exemplo:
