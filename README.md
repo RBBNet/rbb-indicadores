@@ -35,17 +35,21 @@ node metrics.js 27/11/2024 11/12/2024 http://localhost:8545 piloto ./nodes.json
 
 A qual retornaria, por exemplo:
 ```bash
-Data inicial:      Tue Nov 26 2024 21:00:00 GMT-0300 (Horário Padrão de Brasília)
-Data final:        Wed Dec 11 2024 21:00:00 GMT-0300 (Horário Padrão de Brasília)
-Bloco inicial:     8625648
-Bloco final:       8869664
-Blocos produzidos: 244017
-Qtd máx ideal:     324000
-Rendimento:        75%
+Data inicial: DD/MM/AAAA 
+Data final: DD/MM/AAAA
+Bloco inicial:     xxxx
+Bloco final:       xxxx
+Acessando arquivo de configuração:
+ - LAB
+ - PILOTO
+Blocos produzidos: xxxx
+Qtd máx ideal:     xxxx
+Rendimento:        xx%
 ┌─────────┬─────────────┬───────────────────┐
 │ (index) │ Organização │ Blocos produzidos │
 ├─────────┼─────────────┼───────────────────┤
-│ 0       │'organizacao'│ 12345             │
+│ 0       │'organizacao'│ xxxx              │
+│ 1       │'Unknown'    │ xxxx              │
 │ ...     │ '....'      │ ....              │
 └─────────┴─────────────┴───────────────────┘
 Arquivo CSV gerado com sucesso
