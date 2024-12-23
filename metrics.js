@@ -68,9 +68,8 @@ async function getMetrics(){
     date_last = helpers.update_date_last(date_last);
 
     
-
-    console.log(`Data inicial: ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}  ${date_first.getHours()}:${date_first.getMinutes()}:${date_first.getSeconds()} `);
-    console.log(`Data final: ${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()}  ${date_last.getHours()}:${date_last.getMinutes()}:${date_last.getSeconds()} `);
+    console.log(`Data inicial:      ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}`);
+    console.log(`Data final:        ${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()} `);
     
     first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
     last_block_number = (await helpers.gets_block_number_by_date(date_last, provider));
@@ -82,17 +81,19 @@ async function getMetrics(){
     const nodesByIdMap = new Map();
 
     try{
+        console.log("Acessando arquivo de configuração:");
+
         if (fs.lstatSync(nodes_json_folder_path).isDirectory()) {
-            if (fs.existsSync(nodes_json_folder_path+'/nodes_lab.json')) {
-                console.log("Acessando arquivo de configuração: ");
+            if (fs.existsSync(nodes_json_folder_path+'/nodes_lab.json')) {     
                 nodesJsonLab = helpers.lerArquivo(nodes_json_folder_path+'/nodes_lab.json');
                 nodeFunctions.mapNodes(nodesJsonLab, 'lab', nodesByIdMap);
+                console.log(' - LAB');
             } 
             
             if (fs.existsSync(nodes_json_folder_path+'/nodes_piloto.json')) {
-                console.log("Você está consultando a rede piloto");
                 nodesJsonPiloto = helpers.lerArquivo(nodes_json_folder_path+'/nodes_piloto.json');
                 nodeFunctions.mapNodes(nodesJsonPiloto, 'piloto', nodesByIdMap);
+                console.log(' - PILOTO');
             } 
             
         } 
