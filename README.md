@@ -25,13 +25,11 @@ Onde:
     
 - `<provider>` é o endereço http para o qual se pode enviar chamadas JSON-RPC aos nós BESU. Normalmente `http://localhost:8545`
 
-- `<nome da rede>` determina para qual rede as métricas são solicitadas, podendo ser `lab` ou `piloto`
-
-- `<endereço_do_nodes.json>` refere-se ao **path** até o arquivo contendo os metadados dos nós
+- `<endereço_do_nodes.json>` refere-se ao **path** até o arquivo contendo os metadados dos nós. O arquivo json deve ter o nome no formato `nodes_rede.json`.
 
 Dessa forma, uma possível execução dessa ferramenta seria:
 ```bash
-node Blocks\block-metrics.js 27/11/2024 11/12/2024 http://localhost:8545 piloto ../nodesFolder
+node Blocks\block-metrics.js 27/11/2024 11/12/2024 http://localhost:8545 ../nodesFolder
 ```
 
 A qual retornaria, por exemplo:
