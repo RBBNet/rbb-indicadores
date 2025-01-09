@@ -1,4 +1,4 @@
-# Ferramenta para coleta de inidicadores de participação
+# Ferramenta para coleta de indicadores de participação
 Essa ferramenta permite que sejam feitas consultas à RBB quanto as métricas dos partícipes em relação a sua produção de blocos individual, e geral em um determinado período de tempo. Além disso o relatório gerado é salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
 
 ## Preparação do ambiente
@@ -59,7 +59,7 @@ Para utilizar esta ferramenta é necessário **possuir previamente o acesso ao r
 ```json
 {
     "GITHUB_RBB_TOKEN": "<token>",
-    "PROXY_URL": "http://<host>:port"
+    "PROXY_URL": "http://<host>:<port>"
 }
 ```
 Caso não haja proxy, basta adicionar o Token de acesso ao github, conforme o exemplo:
@@ -79,7 +79,7 @@ node Issues/issue-metrics.js
 O qual retornaria, por exemplo:
 
 ```text
-RETRIEVING ISSUES WITH TOKEN OWNED BY <TOKEN OWNER> - @<TOKEN OWNER LOGIN>
+RETRIEVING ISSUES WITH TOKEN OWNED BY <TOKEN_OWNER> - @<TOKEN_OWNER_LOGIN>
 
 --------------------------------------------------
 ISSUES FOR incidente + PRD
