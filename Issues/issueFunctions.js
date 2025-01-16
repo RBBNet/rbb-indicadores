@@ -40,18 +40,9 @@ async function fetchIssues(params) {
 
 function cleanIssues(response){
     return response.data.map(issue => ({
-        'url': issue.url,
         'title': issue.title,
-        'number': issue.number,
-        'id': issue.id,
         'labels': issue.labels.map(label => label.name),
-        'state': issue.state,
         'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
-        'created_by': '@'+issue.user.login,
-        'created_at': new Date(issue.created_at).toLocaleDateString('pt-BR'),
-        'updated_at': issue.updated_at ? new Date(issue.updated_at).toLocaleDateString('pt-BR') : null,
-        'closed_by': issue.closed_by.login ? '@'+issue.closed_by.login : null,
-        'closed_at': issue.closed_at ? new Date(issue.closed_at).toLocaleDateString('pt-BR') : null,
         'DaysOpen': issue.closed_at == null ? calculateDaysOpen(issue.created_at) : calculateDaysOpen(issue.created_at, issue.closed_at)
     }));
 }

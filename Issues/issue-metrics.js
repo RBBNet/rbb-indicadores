@@ -28,7 +28,7 @@ async function listIssues() {
             console.log('-'.repeat(50));
 
             if (issues.length > 0) {
-                console.log(issues);
+                console.table(issues);
             } else {
                 console.log(`No issues found for label: ${label} + PRD`);
             }  
