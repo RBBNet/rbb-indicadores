@@ -13,6 +13,14 @@ function lerArquivo(nomeArquivo) {
     }
 }
 
+function subtractDays (days) {
+    this.setTime(this.getTime()
+        - (days * 24 * 60 * 60 * 1000));
+    return this;
+}
+
+
+
 async function gets_block_number_by_date(date, provider) {
     const dater = new EthDater(provider);
     let block = await dater.getDate(date, true, false);
@@ -73,5 +81,6 @@ module.exports = {
     update_date_last: update_date_last,
     gets_block_number_by_date: gets_block_number_by_date,
     lerArquivo:lerArquivo,
-    write_csv:write_csv
+    write_csv:write_csv,
+    subtractDays: subtractDays
 }

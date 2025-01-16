@@ -3,7 +3,7 @@ const ethers = require('ethers');
 const helpers = require('./helpers.js');
 const nodeFunctions = require('./nodeFunctions.js');
 const fs = require("fs");
-
+const {addDays} = require('date-fns');
 async function blockProductionMetrics(url, first_block_number, last_block_number, nodesByIdMap) {
     const response = await axios.post(url, {
         jsonrpc: "2.0",
@@ -79,12 +79,17 @@ async function getMetrics(){
     console.log(`Data final:        ${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()} `);
     
     first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
-    last_block_number = (await helpers.gets_block_number_by_date(date_last, provider));
+    last_block_number = await helpers.gets_block_number_by_date(date_last, provider);
+
+    let blocksProducedREAL = last_block_number-first_block_number+1;
+    let date_first_seconds = date_first.valueOf()/1000;
+    let date_last_seconds = date_last.valueOf()/1000;
+    let blocksProducedIDEAL = parseInt((date_last_seconds - date_first_seconds + 1)/4)
+    let blocksProductionRate = blocksProducedREAL/blocksProducedIDEAL;
 
     console.log(`Bloco inicial:     ${first_block_number}`);
     console.log(`Bloco final:       ${last_block_number}`);
     
-    let nodesJsonPiloto, nodesJsonLab;
     const nodesByIdMap = new Map();
 
     console.log("Carregando arquivos node.json:");
@@ -98,46 +103,75 @@ async function getMetrics(){
         return;
     }
 
-    const result = await blockProductionMetrics(json_rpc_address, first_block_number, last_block_number, nodesByIdMap);
-    let blocksProducedREAL = last_block_number-first_block_number+1;
-    
-    //converting date from milisseconds to seconds
-    let date_first_seconds = date_first.valueOf()/1000;    
-    let date_last_seconds = date_last.valueOf()/1000;
-    let blocksProducedIDEAL = parseInt((date_last_seconds - date_first_seconds + 1)/4)
-    let blocksProductionRate = blocksProducedREAL/blocksProducedIDEAL;
+    let responses = [];
+    let step_date = addDays(date_first, 7);
+    let cont = 0;
+
+    while (step_date <= date_last) {
+        console.log(`PERÍODO ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth()+1}/${step_date.getFullYear()}`);
+
+        let first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
+        //a linha acima está longe de ser o ideal, porque o script JÁ SABE o first block number,
+        //mas eu preciso declarar ele de novo para o loop funcionar. - Lionel
+
+        let step_block = await helpers.gets_block_number_by_date(step_date, provider);
+
+        if (first_block_number >= step_block){
+            break;
+        } //isso deve garantir a parada do loop na iteração correta.
+
+        responses[cont] = await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap);
+
+        date_first = step_date;
+
+        // Se a diferença entre `date_last` e `date_first` for menor que 7 dias, ajusta o step_date para `date_last`
+        if (addDays(date_first, 7) > date_last) {
+            step_date = date_last;
+        } else {
+            step_date = addDays(step_date, 7);
+        }
+
+        cont += 1;
+    }
+
+    responses = responses.flat();
+
+    const result = Object.values(responses.reduce((acc, curr) => {
+        if (!acc[curr.organization]) {
+            acc[curr.organization] = {
+                organization: curr.organization,
+                proposedBlockCount: 0,
+                lastProposedBlockNumber: 0
+            };
+        }
+        acc[curr.organization].proposedBlockCount += curr.proposedBlockCount;
+        acc[curr.organization].lastProposedBlockNumber = Math.max(acc[curr.organization].lastProposedBlockNumber, curr.lastProposedBlockNumber);
+        return acc;
+    }, {}));
+
+    result.sort((a, b) => a.organization.localeCompare(b.organization));
 
     console.log(`Blocos produzidos: ${blocksProducedREAL}`);
     console.log(`Qtd máx ideal:     ${blocksProducedIDEAL}`);
     console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)*100}%`);
 
-    //sorting by proposedBlockCount descending and organization ascending
-    result.sort((a, b) => {
-        let comp = b.proposedBlockCount - a.proposedBlockCount;
-        if(comp == 0) {
-            comp = a.organization.localeCompare(b.organization);
-        }
-        return comp;
-    });
-    
-    //printing as table
-    filteredResults = result.map(node => ({
+    let filteredResults = result.map(node => ({
         'Organização': node.organization,
         'Blocos produzidos': node.proposedBlockCount
     }));
 
     console.table(filteredResults);
 
-    file_header = 
-`Data inicial;${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}
-Data final;${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()}
-Bloco inicial;${first_block_number}
-Bloco final;${last_block_number}
-Blocos produzidos;${blocksProducedREAL}
-Qtd max ideal;${blocksProducedIDEAL}
-Rendimento;${(blocksProductionRate.toFixed(2)).replace('.',',')}
-
-Organizacao;Blocos Produzidos\n`;
+    let file_header =
+        `Data inicial;${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()}
+        Data final;${date_last.getDate()}/${date_last.getMonth() + 1}/${date_last.getFullYear()}
+        Bloco inicial;${first_block_number}
+        Bloco final;${last_block_number}
+        Blocos produzidos;${blocksProducedREAL}
+        Qtd max ideal;${blocksProducedIDEAL}
+        Rendimento;${(blocksProductionRate.toFixed(2)).replace('.', ',')}
+    
+        Organizacao;Blocos Produzidos\n`;
 
     helpers.write_csv(file_header,filteredResults);
 }
