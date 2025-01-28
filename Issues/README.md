@@ -18,8 +18,13 @@ Caso não haja proxy, basta adicionar o Token de acesso ao github, conforme o ex
 
 Uma vez criado o arquivo, basta utilizar o comando abaixo:
 ```bash
-node Issues/issue-metrics.js
+node Issues/issue-metrics.js <data inicial> <data final>
 ```
+Onde:
+- `<data inicial>` e `<data final>` determinam o período de tempo a ser analizado.
+    - `<data inicial>` deve ser anterior ou igual a `<data final>`.
+    - `<data final>` deve ser anterior ou igual à data corrente.
+    - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
 
 O qual retornaria, por exemplo:
 
