@@ -192,7 +192,7 @@ async function getProjectID(){
         }
         `;
 
-    const { organization } = await octokit.graphql(idQuery, { login: Config.ORG, projectNumber: 4 });
+    const { organization } = await octokit.graphql(idQuery, { login: Config.ORG, projectNumber: Config.PROJECT_NUMBER });
 
     return organization.projectV2.id;
 }
