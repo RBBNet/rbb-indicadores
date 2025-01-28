@@ -14,7 +14,9 @@ Os parâmetros que a ferramenta utiliza são passados por linha de comando nos s
 node Blocks\block-metrics.js <data inicial> <data final> <provider> <endereço_do_nodes.json>
 ```
 Onde:
-- `<data inicial>` e `<data final>` determinam o período de tempo a ser analizado. Sendo necessariamente, a `<data inicial>` anterior a `<data final>`
+- `<data inicial>` e `<data final>` determinam o período de tempo a ser analizado.
+    - `<data inicial>` deve ser anterior ou igual a `<data final>`.
+    - `<data final>` deve ser anterior ou igual à data corrente.
     - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
     
 - `<provider>` é o endereço http para o qual se pode enviar chamadas JSON-RPC aos nós BESU. Normalmente `http://localhost:8545`
