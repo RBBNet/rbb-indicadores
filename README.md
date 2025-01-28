@@ -1,123 +1,48 @@
-# Ferramenta para coleta de indicadores de participação
-Essa ferramenta permite que sejam feitas consultas à RBB quanto as métricas dos partícipes em relação a sua produção de blocos individual, e geral em um determinado período de tempo. Além disso o relatório gerado é salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
+# RBB indicadores
+As ferramentas presentes nesse repositório servem de apoio à equipe da Rede Blockchain Brasil (RBB) nos processos de Maturação da Rede, permitindo que sejam feitas consultas aos nós da RBB para a coleta de índices de Produção de Blocos, além de consultas à API do GITHUB para acompanhamento de issues e do Progresso nos projetos da Rede.
 
-## Preparação do ambiente
-Para utilizar essa ferramenta é necessário:
-- Acesso a algum nó da RBB
-- Arquivo com metadados dos nós
+## Requisitos
+Todas as ferramentas possuem os seguintes requisitos em comum quanto à versão do NodeJS que utilizam:
 - **NodeJS** na versão **22.11** 
 - **NPM** na versão **10.9.0**
+- Arquivo **config.json** criado na pasta raiz do repositório com os campos:
+  - Não havendo proxy, pode-se criar o arquivo sem o campo `PROXY_URL`
+```json
+{   
+    "GITHUB_RBB_TOKEN":"<github_api_token>",
+    "PROXY_URL": "http://host:port",
+    "ORG": "<organization_name>",
+    "PROJECT_NUMBER": <project_number>
+}
+```
+
+### Requisitos Específicos
+### Blocks [🔗](Blocks/README.md)
+- **Acesso à algum nó** da RBB
+- Arquivo com **metadados dos nós**
+
+### ISSUES [🔗](Issues/README.md)
+- **Acesso ao repositório** consultado
+- **Token de acesso** à api do Github com os seguintes escopos:
+  - read:user
+  - repo
+
+### Projects [🔗](Projects/README.md)
+- **Token de acesso** à api do Github com os seguintes escopos:
+  - read:user
+  - repo
+  - read:org
+  - project
+- **Python 3.11** ou superior instalado
+
+## Preparação do ambiente
 
 Para instalar as dependências desse projeto basta utilizar o seguinte comando na pasta raiz dessa aplicação:
 ```javascript
 npm install
 ```
 
-## 1. Métricas de Produção de Blocos
-
-Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
+Para instalar as dependências python para a ferramenta Projects, basta utilizar o seguinte comando em sua console de preferência:
 ```bash
-node Blocks\block-metrics.js <data inicial> <data final> <provider> <endereço_do_nodes.json>
+pip install pandas openpyxl
 ```
-Onde:
-- `<data inicial>` e `<data final>` determinam o período de tempo a ser analizado. Sendo necessariamente, a `<data inicial>` anterior a `<data final>`
-    - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
-    
-- `<provider>` é o endereço http para o qual se pode enviar chamadas JSON-RPC aos nós BESU. Normalmente `http://localhost:8545`
-
-- `<endereço_do_nodes.json>` refere-se ao **path** até o arquivo contendo os metadados dos nós. O arquivo json deve ter o nome no formato `nodes_rede.json`.
-
-Dessa forma, uma possível execução dessa ferramenta seria:
-```bash
-node Blocks\block-metrics.js 27/11/2024 11/12/2024 http://localhost:8545 ../nodesFolder
-```
-
-A qual retornaria, por exemplo:
-```bash
-Data inicial: DD/MM/AAAA 
-Data final: DD/MM/AAAA
-Bloco inicial:     xxxx
-Bloco final:       xxxx
-Acessando arquivo de configuração:
- - LAB
- - PILOTO
-Blocos produzidos: xxxx
-Qtd máx ideal:     xxxx
-Rendimento:        xx%
-┌─────────┬─────────────┬───────────────────┐
-│ (index) │ Organização │ Blocos produzidos │
-├─────────┼─────────────┼───────────────────┤
-│ 0       │'organizacao'│ xxxx              │
-│ 1       │'Unknown'    │ xxxx              │
-│ ...     │ '....'      │ ....              │
-└─────────┴─────────────┴───────────────────┘
-Arquivo CSV gerado com sucesso
-```
-## 2. Issues em Produção
-Para utilizar esta ferramenta é necessário **possuir previamente o acesso ao repositório acessado**. Além disso, é preciso **criar o arquivo** `config.json` na pasta raiz contendo o token de acesso à API do github e, caso a ferramenta seja utilizada em ambiente com proxy, a URL desse, conforme o exemplo abaixo:
-
-```json
-{
-    "GITHUB_RBB_TOKEN": "<token>",
-    "PROXY_URL": "http://<host>:<port>"
-}
-```
-Caso não haja proxy, basta adicionar o Token de acesso ao github, conforme o exemplo:
-```json
-{
-    "GITHUB_RBB_TOKEN": "<token>"
-}
-```
-
-- Em caso de dúvidas sobre como gerar o Token de acesso à API do Github, confira o [link para o Tutorial](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic).
-
-Uma vez criado o arquivo, basta utilizar o comando abaixo:
-```bash
-node Issues/issue-metrics.js
-```
-
-O qual retornaria, por exemplo:
-
-```text
-RETRIEVING ISSUES WITH TOKEN OWNED BY <TOKEN_OWNER> - @<TOKEN_OWNER_LOGIN>
-
---------------------------------------------------
-ISSUES FOR incidente + PRD
---------------------------------------------------
-[
-  {
-    url: 'https://.....',
-    title: 'Lorem Ipsilum',
-    number: xx,
-    id: xxxxxxxxxx,
-    labels: [ 'incidente', 'PRD' ],
-    state: 'closed',
-    assignees: [],
-    created_by: '@randomuser',
-    created_at: '30/10/2024',
-    updated_at: '10/12/2024',
-    closed_by: '@anotheruser',
-    closed_at: '10/12/2024',
-    DaysOpen: 'xx'
-  },
-  ...
-]
-
---------------------------------------------------
-ISSUES FOR incidente-critico + PRD
---------------------------------------------------
-No issues found for label: incidente-critico + PRD
-
---------------------------------------------------
-ISSUES FOR vulnerabilidade + PRD
---------------------------------------------------
-No issues found for label: vulnerabilidade + PRD
-
---------------------------------------------------
-ISSUES FOR vulnerabilidade-critica + PRD
---------------------------------------------------
-No issues found for label: vulnerabilidade-critica + PRD
-```
-
-## Observação:
-1. Para utilizar essa ferramenta é necessário possuir o acesso ao repositório.
