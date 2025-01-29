@@ -1,10 +1,20 @@
 # Acompanhamento das Iniciativas de Maturação do Piloto
+Essa ferramenta realiza consultas ao GitHub, através de sua API, para extração de dados relativos ao projeto de Maturação do Piloto, para acompanhamento das atividades.
+
+# Requisitos
 Para utilizar essa ferramenta é necessário: 
-- Satisfazer as condições gerais de utilização presentes no [README do repositório](../README.md)
-- possuir acesso ao Kanbam requisitado
-- python 3.11 ou superior instalado
-- bibliotecas `pandas` e `openpyxl` instaladas para sua distribuição do python
-- Adicionar os campos `ORG` e `PROJECT_NUMBER` ao arquivo `config.json`, contendo a organização da qual deseja-se acessar os Projetos e o número do Projeto em questão 
+- Satisfazer as condições gerais de utilização presentes no [README do projeto](../README.md)
+- **Possuir acesso ao projeto** (Kanbam) requisitado.
+  - É necessário configurar um **token de acesso** à API do GitHub com os seguintes escopos:
+    - `read:user`
+    - `repo`
+    - `read:org`
+    - `project`
+- **Python 3.11** ou superior instalado
+- Bibliotecas `pandas` e `openpyxl` instaladas para sua distribuição do Python
+- Configurar os parâmetros `ORG` e `PROJECT_NUMBER` ao arquivo `config.json`, contendo a organização da qual deseja-se acessar e o identificador do projeto em questão. De maneira geral, esses parâmetros serão configurados com:
+  - `ORG`: `RBBNet`
+  - `PROJECT_NUMBER`: `4`
 
 ## Utilização
 A ferramenta disponibiliza dois scripts de mesmo nome responsáveis por acioná-la, um para windows e outro para Linux, bastando o usuário atender as condições de utilização e acionar o script referente ao seu sistema operacional na pasta `Projects/`:

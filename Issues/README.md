@@ -1,22 +1,28 @@
-## Issues em Produção
-Para utilizar esta ferramenta é necessário **possuir previamente o acesso ao repositório**. Além disso, é preciso **criar o arquivo** `config.json` na pasta raiz contendo o token de acesso à API do github e, caso a ferramenta seja utilizada em ambiente com proxy, a URL desse, conforme o exemplo abaixo:
+# Issues em Produção
+Essa ferramenta realiza consultas ao GitHub, através de sua API, para extração de dados relativos aos incidentes (issues) de produção em um determinado período de tempo. Um relatório é gerado e salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
 
+## Requisitos
+Para utilizar esta ferramenta é necessário:
+- Instalar as dependências do projeto (ver [README](../README.md) do projeto).
+- **Possuir acesso ao repositório `incidentes`** no GitHub.
+  - É necessário configurar um **token de acesso** à API do GitHub com os seguintes escopos:
+    - `read:user`
+    - `repo`
+- **Criar o arquivo** `config.json` (ver exemplo abaixo) na pasta raiz contendo o token de acesso à API do GitHub.
+- Caso a ferramenta seja utilizada em ambiente com proxy, configurar a URL do mesmo (ver exemplo abaixo).
+
+Exemplo de arquivo `config.json`:
 ```json
 {
     "GITHUB_RBB_TOKEN": "<token>",
     "PROXY_URL": "http://<host>:<port>"
 }
 ```
-Caso não haja proxy, basta adicionar o Token de acesso ao github, conforme o exemplo:
-```json
-{
-    "GITHUB_RBB_TOKEN": "<token>"
-}
-```
 
-- Em caso de dúvidas sobre como gerar o Token de acesso à API do Github, confira o [link para o Tutorial](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic).
+Em caso de dúvidas sobre como gerar o Token de acesso à API do GitHub, confira [este Tutorial](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-personal-access-token-classic).
 
-Uma vez criado o arquivo, basta utilizar o comando abaixo:
+## Utilização
+Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 ```bash
 node Issues/issue-metrics.js <data inicial> <data final>
 ```
@@ -26,7 +32,7 @@ Onde:
     - `<data final>` deve ser anterior ou igual à data corrente.
     - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
 
-O qual retornaria, por exemplo:
+A ferramenta retorna mensagens como as exemplificadas abaixo e gera um arquivo CSV, conforme indicado:
 
 ```text
 RETRIEVING ISSUES WITH TOKEN OWNED BY <TOKEN_OWNER> - @<TOKEN_OWNER_LOGIN>

@@ -1,8 +1,10 @@
 # RBB indicadores
-As ferramentas presentes nesse repositório servem de apoio à equipe da Rede Blockchain Brasil (RBB) nos processos de Maturação da Rede, permitindo que sejam feitas consultas aos nós da RBB para a coleta de índices de Produção de Blocos, além de consultas à API do GITHUB para acompanhamento de issues e do Progresso nos projetos da Rede.
+As ferramentas presentes nesse repositório servem de apoio à equipe da Rede Blockchain Brasil (RBB) para acompanhamento da operação e níveis de serviço da rede e evolução de atividades dos projetos do ecossistema.
+
+As ferramentas realizam consultas aos nós da RBB, para a coleta de índices de Produção de Blocos, e consultas à API do GitHub para acompanhamento do progresso de atividades (issues) nos projetos da rede.
 
 ## Requisitos
-Todas as ferramentas possuem os seguintes requisitos em comum quanto à versão do NodeJS que utilizam:
+As ferramentas possuem os seguintes requisitos em comum:
 - **NodeJS** na versão **22.11** 
 - **NPM** na versão **10.9.0**
 - Arquivo **config.json** criado na pasta raiz do repositório com os campos:
@@ -16,28 +18,15 @@ Todas as ferramentas possuem os seguintes requisitos em comum quanto à versão 
 }
 ```
 
-### Requisitos Específicos
-### Blocks [🔗](Blocks/README.md)
-- **Acesso à algum nó** da RBB
-- Arquivo com **metadados dos nós**
+## Ferramentas
 
-### ISSUES [🔗](Issues/README.md)
-- **Acesso ao repositório** consultado
-- **Token de acesso** à api do Github com os seguintes escopos:
-  - read:user
-  - repo
-
-### Projects [🔗](Projects/README.md)
-- **Token de acesso** à api do Github com os seguintes escopos:
-  - read:user
-  - repo
-  - read:org
-  - project
-- **Python 3.11** ou superior instalado
+- [Blocks](Blocks/README.md) - Gera indicadores sobre a produção de blocos.
+- [Issues](Issues/README.md) - Coleta dados sobre o tratamento de incidentes.
+- [Projects](Projects/README.md) - Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
 
 ## Preparação do ambiente
 
-Para instalar as dependências desse projeto basta utilizar o seguinte comando na pasta raiz dessa aplicação:
+Para instalar as dependências desse projeto basta utilizar o seguinte comando na pasta raiz:
 ```javascript
 npm install
 ```

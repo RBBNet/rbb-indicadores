@@ -1,14 +1,15 @@
-## Métricas de Produção de Blocos
-Essa ferramenta permite que sejam feitas consultas à RBB quanto as métricas dos partícipes em relação a sua produção de blocos individual, e geral em um determinado período de tempo. Além disso o relatório gerado é salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
+# Métricas de Produção de Blocos
+Essa ferramenta realiza consultas a um nó da RBB para extração de métricas relativas à produção de blocos em um determinado período de tempo. Um relatório é gerado e salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
 
-### Preparação do ambiente
+## Requisitos
 Para utilizar essa ferramenta é necessário:
-- Acesso a algum nó da RBB
-- Arquivo com metadados dos nós
-- **NodeJS** na versão **22.11** 
+- Instalar as dependências do projeto (ver [README](../README.md) do projeto).
+- Ter acesso à API JSON-RPC de algum nó da RBB
+- Ter arquivos com metadados dos nós (`nodes_lab.json` e `nodes_piloto.json`) em uma mesma pasta
+- **NodeJS** na versão **22.11**
 - **NPM** na versão **10.9.0**
 
-### Utilização
+## Utilização
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 ```bash
 node Blocks\block-metrics.js <data inicial> <data final> <provider> <endereço_do_nodes.json>
@@ -21,7 +22,7 @@ Onde:
     
 - `<provider>` é o endereço http para o qual se pode enviar chamadas JSON-RPC aos nós BESU. Normalmente `http://localhost:8545`
 
-- `<endereço_do_nodes.json>` refere-se ao **path** até o arquivo contendo os metadados dos nós. O arquivo json deve ter o nome no formato `nodes_rede.json`.
+- `<endereço_do_nodes.json>` refere-se ao **path** até os arquivos contendo os metadados dos nós. Os arquivos json devem ter o nome no formato `nodes_<rede>.json`.
 
 Dessa forma, uma possível execução dessa ferramenta seria:
 ```bash
