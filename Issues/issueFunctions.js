@@ -47,7 +47,8 @@ function cleanIssues(response, date_last){
                 'title': issue.title,
                 'labels': issue.labels.map(label => label.name),
                 'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
-                'DaysOpen': issue.closed_at == null ? calculateDaysOpen(issue.created_at) : calculateDaysOpen(issue.created_at, issue.closed_at)
+                'DaysOpen': issue.closed_at == null ? calculateDaysOpen(issue.created_at) : calculateDaysOpen(issue.created_at, issue.closed_at),
+                'state': issue.state == 'open' ? 'open' : 'closed'
             }
         }
         return null;
