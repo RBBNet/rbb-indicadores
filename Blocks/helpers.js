@@ -1,7 +1,7 @@
-const fs = require('fs');
-const {addDays} = require('date-fns');
-const EthDater = require('ethereum-block-by-date');
-const { stringify } = require('csv-stringify');
+import fs from 'fs';
+import { addDays } from 'date-fns';
+import EthDater from 'ethereum-block-by-date';
+import { stringify } from 'csv-stringify';
 
 function lerArquivo(nomeArquivo) {
     try {
@@ -60,9 +60,9 @@ function validate_date(date){
 
     return !(date > today);
 }
-
-function write_csv(header, data) {
-    path = 'IndiceProducaoBlocos.csv';
+ function write_csv(header, data) {
+    // Cria o arquivo CSV com o cabeçalho e os dados
+    const path = 'IndiceProducaoBlocos.csv';
    
     fs.writeFileSync(path, header, 'utf-8', (err) => {
         if (err) console.error('Erro ao escrever o cabeçalho', err);
@@ -74,13 +74,4 @@ function write_csv(header, data) {
         .on('error', (err) => console.error('Erro ao gerar o arquivo CSV', err));
 }
 
-
-module.exports = {
-    string_to_date: string_to_date,
-    validate_date: validate_date,
-    update_date_last: update_date_last,
-    gets_block_number_by_date: gets_block_number_by_date,
-    lerArquivo:lerArquivo,
-    write_csv:write_csv,
-    subtractDays: subtractDays
-}
+export default {string_to_date,validate_date,update_date_last,gets_block_number_by_date,lerArquivo,write_csv,subtractDays};

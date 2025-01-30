@@ -1,9 +1,10 @@
-const axios = require('axios');
-const ethers = require('ethers');
-const helpers = require('./helpers.js');
-const nodeFunctions = require('./nodeFunctions.js');
-const fs = require("fs");
-const {addDays} = require('date-fns');
+import axios from 'axios';
+import { ethers } from 'ethers';
+import helpers from './helpers.js';
+import nodeFunctions from './nodeFunctions.js';
+import fs from 'fs';
+import { addDays } from 'date-fns';
+
 async function blockProductionMetrics(url, first_block_number, last_block_number, nodesByIdMap) {
     const response = await axios.post(url, {
         jsonrpc: "2.0",

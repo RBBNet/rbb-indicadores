@@ -22,12 +22,12 @@ async function translateMetrics(metricas, idMap) {
                 body.node = node.name;
             }
             catch(err){
-                body.organization = "Unknown";
-                body.node = "Unknown";
+                body.organization = `Unknown${i}`;
+                body.node = `Unknown${i}`;
             }
         } else {
-            body.organization = "Unknown";
-            body.node = "Unknown";
+            body.organization = `Unknown${i}`;
+            body.node = `Unknown${i}`;
         }
 
         body.proposedBlockCount = parseInt(metricas[i].proposedBlockCount);
@@ -37,7 +37,4 @@ async function translateMetrics(metricas, idMap) {
     return responseBody;
 }
 
-module.exports = {
-    mapNodes: mapNodes,
-    translateMetrics: translateMetrics
-}
+export default {mapNodes,translateMetrics};
