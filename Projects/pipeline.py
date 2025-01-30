@@ -37,7 +37,7 @@ def string_to_date(periodo):
 def check_previous_progress(colunas,date, iniciativas, iniciativa_index):
 	current_col_index = colunas.get_loc(date)
 	left_columns = colunas[:current_col_index]
-	has_any_progress_before_date = any(iniciativas.loc[iniciativa_index, col] == 2  or iniciativas.loc[iniciativa_index, col] == 1 for col in left_columns)
+	has_any_progress_before_date = any(iniciativas.loc[iniciativa_index, col] == 'verde'  or iniciativas.loc[iniciativa_index, col] == 'amarelo' for col in left_columns)
 	if has_any_progress_before_date:
 		return True
 	return False
@@ -86,7 +86,7 @@ def main(periodo):
 	Se merged_issues_timeline.empty
 
 	Então olhar passado e atribuir valor.
-		-1 ou 1 
+		'vermelho' ou 'amarelo'
 	"""
 
 	if issues.empty:
@@ -110,7 +110,7 @@ def main(periodo):
 					if (f'[{IDs[0]}]' in title) and (f'[{IDs[1]}]' in title):
 						for date in colunas:
 								if date.month == mes_corrente.month:
-									iniciativas.loc[index_iniciativa, date] = -1
+									iniciativas.loc[index_iniciativa, date] = 'vermelho'
 			else:
 				print(f'\nIdentificadores incorretos: {IDs}\n - Não foi possível buscar issues para esse conjunto de IDs')
 
@@ -138,11 +138,11 @@ def main(periodo):
 						if '#andamento' in row['body']:
 							print(f'  - #andamento encontrada para esse comentário da issue')
 							merged_issues_timeline.at[index, 'iniciativa_id'] = iniciativa_id
-							merged_issues_timeline.loc[index, 'progress'] = 2
+							merged_issues_timeline.loc[index, 'progress'] = 'verde'
 						else:
 							print(f'  - #andamento não encontrada para esse comentário da issue')
 							merged_issues_timeline.at[index, 'iniciativa_id'] = iniciativa_id
-							merged_issues_timeline.loc[index, 'progress'] = -1
+							merged_issues_timeline.loc[index, 'progress'] = 'vermelho'
 		
 		print('\nFiltrando eventos para eliminar valores conflitantes...')
 		filtered_df = filter_merged_df(merged_issues_timeline)
@@ -169,8 +169,8 @@ def main(periodo):
 								print(f"  - Atualizando iniciativa com ID {iniciativa_id} no mês: {date.month}/{date.year}")
 								if row['progress'] == -1:
 									if check_previous_progress(colunas, date, iniciativas, iniciativa_index):
-										print(f"  - há progresso anterior para a iniciativa, atualizando com 1")
-										iniciativas.loc[iniciativa_index, date] = 1
+										print(f"  - há progresso anterior para a iniciativa, atualizando com amarelo")
+										iniciativas.loc[iniciativa_index, date] = 'amarelo'
 										break
 									else:
 										print(f"  - Não há progresso anterior para a iniciativa, atualizando com {row['progress']}")
@@ -191,12 +191,12 @@ def main(periodo):
 						print(f"  - Atualizando iniciativa com ID {iniciativa_id} no mês: {date.month}/{date.year}")
 	
 						if check_previous_progress(colunas, date, iniciativas, iniciativa_index):
-							print(f"  - há progresso anterior para a iniciativa, atualizando com 1")
-							iniciativas.loc[iniciativa_index, date] = 1
+							print(f"  - há progresso anterior para a iniciativa, atualizando com amarelo")
+							iniciativas.loc[iniciativa_index, date] = 'amarelo'
 							break
 						else:
-							print(f"  - Não há progresso anterior para a iniciativa, atualizando com -1")
-							iniciativas.loc[iniciativa_index, date] = -1
+							print(f"  - Não há progresso anterior para a iniciativa, atualizando com vermelho")
+							iniciativas.loc[iniciativa_index, date] = 'vermelho'
 							break
 			
 					  
