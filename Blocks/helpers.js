@@ -2,7 +2,7 @@ import fs from 'fs';
 import { addDays } from 'date-fns';
 import EthDater from 'ethereum-block-by-date';
 import { stringify } from 'csv-stringify';
-
+import path from 'path';
 function lerArquivo(nomeArquivo) {
     try {
         const data = fs.readFileSync(nomeArquivo, 'utf8');
@@ -62,15 +62,30 @@ function validate_date(date){
 }
  function write_csv(header, data) {
     // Cria o arquivo CSV com o cabeçalho e os dados
-    const path = 'IndiceProducaoBlocos.csv';
-   
-    fs.writeFileSync(path, header, 'utf-8', (err) => {
-        if (err) console.error('Erro ao escrever o cabeçalho', err);
+    const resultsFolder = path.join('.', 'Blocks', 'results');
+    if (!fs.existsSync(resultsFolder)) {
+        fs.mkdirSync(resultsFolder, { recursive: true });
+    }
+    
+    const fileName = 'IndiceProducaoBlocos.csv';
+    const filePath = path.join(resultsFolder, fileName);
+
+    console.log(`\nGerando Arquivo ${fileName}...`);
+
+    fs.writeFileSync(filePath, header, 'utf-8', (err) => {
+        if (err){
+            if(err.code === 'EBUSY'){
+                console.error(`\n - Arquivo ${fileName} em uso. Feche o arquivo e tente novamente.`);
+            }
+            else{
+                console.error(`\nErro gerando Arquivo CSV: ${err}`);
+            }
+        }
     });
 
     const csvStream = stringify(data, { delimiter: ';' });
-    csvStream.pipe(fs.createWriteStream(path, { flags: 'a'}))
-        .on('finish', () => console.log('Arquivo CSV gerado com sucesso'))
+    csvStream.pipe(fs.createWriteStream(filePath, { flags: 'a'}))
+        .on('finish', () => console.log(` Arquivo ${fileName} gerado com sucesso no caminho: ${filePath}`))
         .on('error', (err) => console.error('Erro ao gerar o arquivo CSV', err));
 }
 

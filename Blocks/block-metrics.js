@@ -20,7 +20,7 @@ async function blockProductionMetrics(url, first_block_number, last_block_number
 function mapNodes(nodesByIdMap, nodes_json_folder_path, rede) {
     const arquivo = nodes_json_folder_path + '/nodes_' + rede + '.json';
     if (fs.existsSync(arquivo)) {     
-        nodesJsonLab = helpers.lerArquivo(arquivo);
+        let nodesJsonLab = helpers.lerArquivo(arquivo);
         nodeFunctions.mapNodes(nodesJsonLab, rede, nodesByIdMap);
         console.log(` - ${rede}: ${arquivo}`);
     } 
