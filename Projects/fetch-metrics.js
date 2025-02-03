@@ -4,9 +4,13 @@ import fs from 'fs';
 import path from 'path';    
 
 getActiveIssues().then(activeIssues => {
-    console.log('Gerando Arquivos CSV para TIMELINE e ISSUES..');
-    writeTimelineCSV(activeIssues);
-   writeIssueCSV(activeIssues);
+    if (Array.isArray(activeIssues) && activeIssues.length > 0) {
+        console.log('Gerando Arquivos CSV para TIMELINE e ISSUES..');
+        writeTimelineCSV(activeIssues);
+        writeIssueCSV(activeIssues);
+    } else {
+        console.error('Nenhuma issue ativa encontrada ou activeIssues não é uma array.');
+    }
 }).then(() => {
     const resultsFolder = path.join('.', 'result');
     if (!fs.existsSync(resultsFolder)) {
@@ -34,7 +38,9 @@ getActiveIssues().then(activeIssues => {
 async function getActiveIssues(){
     console.log('\nObtendo Iniciativas de Maturação do Piloto...');
     const projectKanbamCards = await functions.fetchProjectData();
- 
+    if (!Array.isArray(projectKanbamCards)) {
+        throw new Error('projectKanbamCards não é uma array');
+    }
     let activeIssues = [];
     try{
         for(const card of projectKanbamCards){

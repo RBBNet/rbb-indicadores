@@ -158,8 +158,7 @@ async function fetchProjectData() {
         const data = (await octokit.graphql(query)).node.items.nodes;
 
         let filteredData =  data.filter(node => (Object.keys(node.content).length > 0) 
-                            && (node.fieldValueByName.status == 'In Progress'));
-      
+        && (node.fieldValueByName && (node.fieldValueByName.status == 'In Progress' || node.fieldValueByName.status == 'Done')));
         return filteredData;
     } 
     catch (error) {

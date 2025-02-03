@@ -1,6 +1,16 @@
+from os import makedirs
+import os
+import re
 import pandas as pd
 from datetime import datetime
 import warnings
+import shutil
+
+#Constantes
+ANDAMENTO = 'Andamento'
+SEM_ANDAMENTO = 'Sem_andamento'
+NAO_INICIADO = 'Nao_iniciado'
+ENCERRADO = 'Encerrado'
 
 """
 Função para filtrar o dataframe contendo 
@@ -8,6 +18,7 @@ os eventos de timeline e as issues.
 Mantém apenas uma ocorrência 
 de maior valor por mês,
 """
+
 def filter_merged_df(merged_df):
 	
 
@@ -37,10 +48,14 @@ def string_to_date(periodo):
 def check_previous_progress(colunas,date, iniciativas, iniciativa_index):
 	current_col_index = colunas.get_loc(date)
 	left_columns = colunas[:current_col_index]
-	has_any_progress_before_date = any(iniciativas.loc[iniciativa_index, col] == 'verde'  or iniciativas.loc[iniciativa_index, col] == 'amarelo' for col in left_columns)
+	has_any_progress_before_date = any(iniciativas.loc[iniciativa_index, col] == ANDAMENTO  or iniciativas.loc[iniciativa_index, col] == SEM_ANDAMENTO for col in left_columns)
+	finished_before_date = any(iniciativas.loc[iniciativa_index, col] == ENCERRADO for col in left_columns)
 	if has_any_progress_before_date:
-		return True
-	return False
+		return NAO_INICIADO
+	elif finished_before_date:
+		return ENCERRADO
+	else:     
+		return SEM_ANDAMENTO
 
 
 def load_files():
@@ -57,19 +72,19 @@ def load_files():
 
 	return iniciativas, issues, timeline
 	
-
 """
 Se não há eventos de timeline para as issues encontradas:
-	- Marcar o mês corrente como sem progresso, código -1.
+	- Marcar o mês corrente como sem progresso, código NAO_INICIADO.
 Se não há eventos de timeline para as issues encontradas mas 
 	há progresso anterior
-		- Marcar o mês corrente como sem progresso, código -1.
+		- Marcar o mês corrente como sem progresso, código NAO_INICIADO.
 
 Se há eventos de timeline para as issues encontradas, buscar progresso:
-	-1: Não há Progresso anterior, Progresso não encontrado, #andamento não encontrada.
-	 1: Há Progresso anterior, Progresso não encontrado, #andamento não encontrada
-	 2: Há Progresso anterior, Progresso encontrado, #andamento encontrada
+	NAO_INICIADO: Não há Progresso anterior, Progresso não encontrado, #andamento não encontrada.
+	SEM_ANDAMENTO: Há Progresso anterior, Progresso não encontrado, #andamento não encontrada
+	ANDAMENTO: Há Progresso anterior, Progresso encontrado, #andamento encontrada
 """
+
 def main(periodo):
 	warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -86,7 +101,7 @@ def main(periodo):
 	Se merged_issues_timeline.empty
 
 	Então olhar passado e atribuir valor.
-		'vermelho' ou 'amarelo'
+		'Nao_iniciado' ou 'Sem_andamento'
 	"""
 
 	if issues.empty:
@@ -110,7 +125,7 @@ def main(periodo):
 					if (f'[{IDs[0]}]' in title) and (f'[{IDs[1]}]' in title):
 						for date in colunas:
 								if date.month == mes_corrente.month:
-									iniciativas.loc[index_iniciativa, date] = 'vermelho'
+									iniciativas.loc[index_iniciativa, date] = NAO_INICIADO
 			else:
 				print(f'\nIdentificadores incorretos: {IDs}\n - Não foi possível buscar issues para esse conjunto de IDs')
 
@@ -121,32 +136,39 @@ def main(periodo):
 		merged_issues_timeline['progress'] = 0
 
 		print("\nBuscando Progresso nas Issues...")
-		
+
+		# Cria um DataFrame temporário para armazenar os resultados
+		temp_df = pd.DataFrame(columns=['index', 'iniciativa_id', 'progress'])
+
 		for iniciativa_id in iniciativas['ID']:
 			if pd.isna(iniciativa_id):
 				continue
 			
 			IDs = fetchIDs(str(iniciativa_id))
 			
-			if IDs.__len__() == 2:
-				for index, row in merged_issues_timeline.iterrows():
-					title = str(row['title'])
-					if (f'[{IDs[0]}]' in title) and (f'[{IDs[1]}]' in title):
+			if len(IDs) == 2:
+				mask = merged_issues_timeline['title'].str.contains(re.escape(f'[{IDs[0]}]')) & merged_issues_timeline['title'].str.contains(re.escape(f'[{IDs[1]}]'))
+				filtered_rows = merged_issues_timeline[mask]
 
-						print(f' - Encontrada issue e evento de comentário para a Iniciativa com ID {iniciativa_id}, buscando #andamento..')
+				for index, row in filtered_rows.iterrows():
+					print(f' - Encontrada issue e evento de comentário para a Iniciativa com ID {iniciativa_id}, buscando #andamento..')
 
-						if '#andamento' in row['body']:
-							print(f'  - #andamento encontrada para esse comentário da issue')
-							merged_issues_timeline.at[index, 'iniciativa_id'] = iniciativa_id
-							merged_issues_timeline.loc[index, 'progress'] = 'verde'
-						else:
-							print(f'  - #andamento não encontrada para esse comentário da issue')
-							merged_issues_timeline.at[index, 'iniciativa_id'] = iniciativa_id
-							merged_issues_timeline.loc[index, 'progress'] = 'vermelho'
-		
+					if '#andamento' in row['body']:
+						print(f'  - #andamento encontrada para esse comentário da issue')
+						temp_df = pd.concat([temp_df, pd.DataFrame({'index': [index], 'iniciativa_id': [iniciativa_id], 'progress': [ANDAMENTO]})], ignore_index=True)
+					else:
+						print(f'  - #andamento não encontrada para esse comentário da issue')
+						temp_df = pd.concat([temp_df, pd.DataFrame({'index': [index], 'iniciativa_id': [iniciativa_id], 'progress': [NAO_INICIADO]})], ignore_index=True)
+
+		# Atualiza o DataFrame original com os resultados
+		for _, row in temp_df.iterrows():
+			merged_issues_timeline.at[row['index'], 'iniciativa_id'] = row['iniciativa_id']
+			# Converte explicitamente o valor de 'progress' para string
+			merged_issues_timeline.at[row['index'], 'progress'] = str(row['progress'])
+
 		print('\nFiltrando eventos para eliminar valores conflitantes...')
 		filtered_df = filter_merged_df(merged_issues_timeline)
-		
+
 		print('\nAtribuindo progresso às iniciativas...')
 		for iniciativa_id in iniciativas['ID']:
 			if pd.isna(iniciativa_id):
@@ -167,10 +189,10 @@ def main(periodo):
 						for date in colunas:
 							if date.month == event_creation.month and date.year == event_creation.year:
 								print(f"  - Atualizando iniciativa com ID {iniciativa_id} no mês: {date.month}/{date.year}")
-								if row['progress'] == -1:
+								if row['progress'] == SEM_ANDAMENTO:
 									if check_previous_progress(colunas, date, iniciativas, iniciativa_index):
-										print(f"  - há progresso anterior para a iniciativa, atualizando com amarelo")
-										iniciativas.loc[iniciativa_index, date] = 'amarelo'
+										print(f"  - há progresso anterior para a iniciativa, atualizando com Sem_Andamento")
+										iniciativas.loc[iniciativa_index, date] = SEM_ANDAMENTO
 										break
 									else:
 										print(f"  - Não há progresso anterior para a iniciativa, atualizando com {row['progress']}")
@@ -181,28 +203,25 @@ def main(periodo):
 									iniciativas.loc[iniciativa_index, date] = row['progress']
 									break
 
-			# não há issue associada ao ID em questão			
+			# Não há issue associada ao ID em questão			
 			if not hasPair:
 				print(f'\n - Não há eventos de comentário para a Iniciativa com ID {iniciativa_id}')
 				iniciativa_index = iniciativas[iniciativas['ID'] == iniciativa_id].index[0]
-				
 				for date in colunas:
 					if date.month == mes_corrente.month and date.year == mes_corrente.year:
 						print(f"  - Atualizando iniciativa com ID {iniciativa_id} no mês: {date.month}/{date.year}")
 	
 						if check_previous_progress(colunas, date, iniciativas, iniciativa_index):
-							print(f"  - há progresso anterior para a iniciativa, atualizando com amarelo")
-							iniciativas.loc[iniciativa_index, date] = 'amarelo'
+							print(f"  - há progresso anterior para a iniciativa, atualizando com Sem_andamento")
+							iniciativas.loc[iniciativa_index, date] = SEM_ANDAMENTO
 							break
-						else:
-							print(f"  - Não há progresso anterior para a iniciativa, atualizando com vermelho")
-							iniciativas.loc[iniciativa_index, date] = 'vermelho'
+						elif print(f"  - Não há progresso anterior para a iniciativa, atualizando com Nao_iniciada"):
+							iniciativas.loc[iniciativa_index, date] = NAO_INICIADO
 							break
 			
 					  
 	# atualizar arquivos com metadados das iniciativas
 	resultFileName = './result/iniciativas_updated.csv'
-
 	print(f'\nSalvando alterações nas Iniciativas no arquivo: {resultFileName}')
 
 	iniciativas.to_csv(resultFileName,sep =';', index=False)
