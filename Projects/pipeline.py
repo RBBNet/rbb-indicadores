@@ -61,7 +61,7 @@ def check_previous_progress(colunas,date, iniciativas, iniciativa_index):
 def load_files():
 	print("\nAcessando arquivos com metadados...")
 
-	files = ['./tmp/Indicadores.xlsx', './tmp/issues.csv', './tmp/timeline.csv']
+	files = ['./tmp/Indicadores.xlsx', './tmp/Issues.csv', './tmp/Comentarios.csv']
 	
 	for file in files:
 		print(f' - {file}')

@@ -5,7 +5,7 @@ import path from 'path';
 
 getActiveIssues().then(activeIssues => {
     if (Array.isArray(activeIssues) && activeIssues.length > 0) {
-        console.log('Gerando Arquivos CSV para TIMELINE e ISSUES..');
+        console.log('Gerando Arquivos CSV para comentários e issues...');
         writeTimelineCSV(activeIssues);
         writeIssueCSV(activeIssues);
     } else {
@@ -91,7 +91,7 @@ async function writeTimelineCSV(activeIssues){
         fs.mkdirSync(resultsFolder, { recursive: true });
     }
 
-    const fileName = `timeline.csv`;
+    const fileName = `Comentarios.csv`;
     const filePath = path.join(resultsFolder, fileName);
     
     fs.writeFile(filePath, fileData, { encoding: 'utf-8' }, (err) => {
@@ -116,7 +116,7 @@ async function writeIssueCSV(activeIssues) {
         fs.mkdirSync(resultsFolder, { recursive: true });
     }
 
-    const fileName = `issues.csv`;
+    const fileName = `Issues.csv`;
     const filePath = path.join(resultsFolder, fileName);
 
     fs.writeFile(filePath, fileData, { encoding: 'utf-8' }, (err) => {
