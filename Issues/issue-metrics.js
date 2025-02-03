@@ -27,7 +27,7 @@ async function listIssues() {
             return
         } 
         
-        let fileData = 'title;labels;assignees;daysOpen;state';
+        let fileData = 'number;title;labels;assignees;daysOpen';
         for (const label of labels) {
 
             /*
@@ -39,7 +39,7 @@ async function listIssues() {
             const params = {
                 owner: 'RBBNet',
                 repo: 'incidentes',
-                state:'all',
+                state:'closed',
                 labels: `${label},PRD`,
                 since: date_first.toISOString(),
                 headers: {
@@ -55,7 +55,7 @@ async function listIssues() {
 
             if (issues.length > 0) {
                 issues.forEach(issue => {
-                    fileData += `\n${issue.title};${issue.labels};${issue.assignees};${issue.DaysOpen};${issue.state}`;
+                    fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen}`;
                 });
 
                 console.table(issues);
@@ -69,7 +69,7 @@ async function listIssues() {
             fs.mkdirSync(resultsFolder, { recursive: true });
         }
         
-        const fileName = 'issues.csv';
+        const fileName = 'Incidentes.csv';
         const filePath = path.join(resultsFolder, fileName);
 
         console.log(`\nGerando Arquivo ${fileName}...`);

@@ -1,6 +1,8 @@
 # Issues em Produção
 Essa ferramenta realiza consultas ao GitHub, através de sua API, para extração de dados relativos aos incidentes (issues) de produção em um determinado período de tempo. Um relatório é gerado e salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
 
+A ferramenta retorna todas as issues já fechadas que foram atualizadas pela última vez no período solicitado.
+
 ## Requisitos
 Para utilizar esta ferramenta é necessário:
 - Instalar as dependências do projeto (ver [README](../README.md) do projeto).
@@ -61,6 +63,6 @@ ISSUES FOR vulnerabilidade-critica + PRD
 --------------------------------------------------
 No issues found for label: vulnerabilidade-critica + PRD
 
-Gerando Arquivo issues.csv...
- - Arquivo issues.csv gerado com sucesso no caminho: Issues\results\issues.csv.
+Gerando Arquivo Incidentes.csv...
+ - Arquivo Incidentes.csv gerado com sucesso no caminho: Issues\results\Incidentes.csv.
 ```
