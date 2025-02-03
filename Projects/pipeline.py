@@ -133,7 +133,7 @@ def main(periodo):
 		
 	else:
 		merged_issues_timeline['iniciativa_id'] = ''
-		merged_issues_timeline['progress'] = 0
+		merged_issues_timeline['progress'] = ''
 
 		print("\nBuscando Progresso nas Issues...")
 
