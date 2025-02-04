@@ -9,12 +9,19 @@ const RESULT_DIR = 'result';
 const RESULT_FILE = 'iniciativas_updated.csv';
 const HEADER_ROW = 0;
 const FIRST_DATA_ROW = HEADER_ROW + 1;
+const ID_COLUMN = 0;
+const INITIATIVE_COLUMN = 1;
+const RESPONSIBLES_COLUMN = 2;
 const FIRST_DATA_COLUMN = 3;
+const ID_HEADER = 'ID';
+const INITIATIVE_HEADER = 'Iniciativa';
+const RESPONSIBLES_HEADER = 'Responsáveis';
 const TAG_ANDAMENTO = '#andamento';
 const ANDAMENTO = 'Andamento';
 const SEM_ANDAMENTO = 'Sem_andamento';
 const NAO_INICIADO = 'Nao_iniciado';
 const ENCERRADO = 'Encerrado';
+const PERIOD_REGEX = /^01\/(0[1-9]|1[0-2])\/20\d{2}$/;
 
 main();
 
@@ -29,6 +36,16 @@ async function main() {
         console.error(`Erro: O arquivo ${initiativesFileName} não foi encontrado`);
         process.exit(1);
     }
+    console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...`);
+    const initiatives = await loadInitiatives(initiativesFileName);
+    // Descobre a coluna do CSV que corresponde ao período de referência
+    const refColumn = getRefColumn(initiatives, refMonth, refYear);
+    if(refColumn == FIRST_DATA_COLUMN) {
+        // Ferramenta não sabe tratar o primeiro período, que deve ser inicializado manualmente
+        console.error('Primeiro período de acompanhamento deve ser inicializado manualmente');
+        process.exit(1);
+    }
+    console.log();
 
     console.log('Obtendo iniciativas de Maturação do Piloto...');
     const activeIssues = await getActiveIssues(refMonth, refYear);
@@ -52,11 +69,6 @@ async function main() {
     for(let i = 0; i < inProgressIssues.length; ++i) {
         console.log(` - ${inProgressIssues[i].issue.issue_id} - ${inProgressIssues[i].issue.title}`);
     }
-    console.log();
-
-    console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...`);
-    const initiatives = await loadInitiatives(initiativesFileName);
-    const refColumn = getRefColumn(initiatives, refMonth, refYear);
     console.log();
 
     console.log(`Atualizando andamento das iniciativas...`);
@@ -93,7 +105,7 @@ async function main() {
     console.log();
 
     console.log('Gerando arquivos atualizado de iniciativas...');
-    writeCsv(RESULT_DIR, RESULT_FILE, initiatives);
+    await writeCsv(RESULT_DIR, RESULT_FILE, initiatives);
     console.log();
 }
 
@@ -108,20 +120,6 @@ function initiativeHasPreviousState(initiative, refColumn, state) {
 
 /**
  * Function to retrieve issues associated to a Project Kanbam Card and their timelines.
- * @returns {[{
-*            'title': string,,
-*            'labels': [string],
-*            'assignees': [string],
-*            'createdAt': Date,
-*            'closedAt': Date,
-*            'daysOpen': Int
-*         },
-*           {
-*            'event': string
-*            'event_created_at': Date
-*            'user': string
-*            'progress': bool
-*         }]}
  */
 async function getActiveIssues(refMonth, refYear) {
     const projectKanbamCards = await functions.fetchProjectData();
@@ -144,7 +142,6 @@ async function getActiveIssues(refMonth, refYear) {
 
     return activeIssues;
 }
-
 
 async function writeTimelineCSV(activeIssues) {
     let fileData = [];
@@ -191,9 +188,24 @@ async function loadInitiatives(initiativesFileName) {
         });
     });
     const initiatives = await parsePromise;
-    // TODO validar cabeçalho
-    // TODO validar colunas
-    // TODO validar formatos das datas
+    // Valida formato do arquivo
+    if(initiatives[HEADER_ROW].length < 5) {
+        throw new Error(`Arquivo de iniciativas deve ter ao menos as colunas "${ID_HEADER}", "${INITIATIVE_HEADER}", "${RESPONSIBLES_HEADER}" e dois meses de acompanhamento`);
+    }
+    if(initiatives[HEADER_ROW][ID_COLUMN] != ID_HEADER) {
+        throw new Error(`Coluna "${ID_HEADER}" não encontrada na posição ${ID_COLUMN}`);
+    }
+    if(initiatives[HEADER_ROW][INITIATIVE_COLUMN] != INITIATIVE_HEADER) {
+        throw new Error(`Coluna "${INITIATIVE_HEADER}" não encontrada na posição ${INITIATIVE_COLUMN}`);
+    }
+    if(initiatives[HEADER_ROW][RESPONSIBLES_COLUMN] != RESPONSIBLES_HEADER) {
+        throw new Error(`Coluna "${RESPONSIBLES_HEADER}" não encontrada na posição ${RESPONSIBLES_COLUMN}`);
+    }
+    for(let i = FIRST_DATA_COLUMN; i < initiatives[HEADER_ROW].length; ++i) {
+        if(!PERIOD_REGEX.test(initiatives[HEADER_ROW][i])) {
+            throw new Error(`Coluna ${i} - ${initiatives[HEADER_ROW][i]} não obedece o padrão ${PERIOD_REGEX}`);
+        }
+    }
     return initiatives;
 }
 
