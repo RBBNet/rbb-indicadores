@@ -19,20 +19,25 @@ const ENCERRADO = 'Encerrado';
 main();
 
 async function main() {
-
     // TODO obter e validar parâmetros da linha de comando
+    
     const refMonth = 1;
     const refYear = 2025;
-    const initiativesFileName = './tmp/iniciativas_updated.csv';
+    const initiativesFileName = path.join(TEMP_DIR, RESULT_FILE);
+    
+    if (!fs.existsSync(initiativesFileName)) {
+        console.error(`Erro: O arquivo ${initiativesFileName} não foi encontrado`);
+        process.exit(1);
+    }
 
     console.log('Obtendo iniciativas de Maturação do Piloto...');
-    const activeIssues = await getActiveIssues();
+    const activeIssues = await getActiveIssues(refMonth, refYear);
     if(activeIssues.length == 0) {
         console.error('Nenhuma issue ativa encontrada.');
     }
     console.log('Gerando arquivos CSV para comentários e issues...');
-    writeTimelineCSV(activeIssues);
-    writeIssueCSV(activeIssues);
+    await writeTimelineCSV(activeIssues);
+    await writeIssueCSV(activeIssues);
     console.log();
 
     // Verifica quais issues possuem comentários com a tag de andamento
@@ -51,7 +56,6 @@ async function main() {
 
     console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...`);
     const initiatives = await loadInitiatives(initiativesFileName);
-    // Descobre a coluna do CSV que corresponde ao período de referência
     const refColumn = getRefColumn(initiatives, refMonth, refYear);
     console.log();
 
@@ -90,6 +94,7 @@ async function main() {
 
     console.log('Gerando arquivos atualizado de iniciativas...');
     writeCsv(RESULT_DIR, RESULT_FILE, initiatives);
+    console.log();
 }
 
 function initiativeHasPreviousState(initiative, refColumn, state) {
@@ -118,7 +123,7 @@ function initiativeHasPreviousState(initiative, refColumn, state) {
 *            'progress': bool
 *         }]}
  */
-async function getActiveIssues() {
+async function getActiveIssues(refMonth, refYear) {
     const projectKanbamCards = await functions.fetchProjectData();
     if (!Array.isArray(projectKanbamCards)) {
         throw new Error('projectKanbamCards não é uma array');
@@ -126,34 +131,21 @@ async function getActiveIssues() {
 
     let activeIssues = [];
     for(const card of projectKanbamCards){
-        let issue = helpers.cleanIssue(card.content)
-        let timeline = await functions.fetchIssueTimelineData(card.content.repository.name, card.content.number)
+        const issue = helpers.cleanIssue(card.content);
+        const timeline = await functions.fetchIssueTimelineData(card.content.repository.name, card.content.number);
+        const timelineRefPeriod = timeline.filter(ev => 
+            (ev.event_created_at.getMonth() + 1) == refMonth && ev.event_created_at.getFullYear() == refYear
+        );
         activeIssues.push({
             "issue":issue,
-            "timeline":timeline
+            "timeline":timelineRefPeriod
         });
     }
 
     return activeIssues;
 }
-/**
- * Function to write Progress Tracking info to CSV file
- * for each active issue retrived.
- * @param {[{
-*            'title': string,,
-*            'labels': [string],
-*            'assignees': [string],
-*            'createdAt': Date,
-*            'closedAt': Date,
-*            'daysOpen': Int
-*         },
-*           {
-*            'event': string
-*            'event_created_at': Date
-*            'user': string
-*            'progress': bool
-*         }]} activeIssues
- */
+
+
 async function writeTimelineCSV(activeIssues) {
     let fileData = [];
     let header = ['issue_id', 'event_id', 'event', 'event_created_at','user', 'body'];
@@ -163,7 +155,7 @@ async function writeTimelineCSV(activeIssues) {
             fileData.push([timelineEvent.issue_id, timelineEvent.id, timelineEvent.event, timelineEvent.event_created_at.toISOString(), timelineEvent.user, timelineEvent.body]);
         });
     });
-    writeCsv(TEMP_DIR, 'Comentarios.csv', fileData);
+    await writeCsv(TEMP_DIR, 'Comentarios.csv', fileData);
 }
 
 async function writeIssueCSV(activeIssues) {
@@ -174,7 +166,7 @@ async function writeIssueCSV(activeIssues) {
         const issue = activeIssue.issue;
         fileData.push([issue.issue_id, issue.title]);
     });
-    writeCsv(TEMP_DIR, 'Issues.csv', fileData);
+    await writeCsv(TEMP_DIR, 'Issues.csv', fileData);
 }
 
 async function writeCsv(fileDir, fileName, fileData) {

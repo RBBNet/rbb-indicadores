@@ -43,7 +43,7 @@ function calculateDaysOpen(creationString, closedString){
 }
 
 function findProgressTag(text){
-    let Tags = ['#EVOLUÇÃO']
+    let Tags = ['#andamento']
     for(const tag of Tags){
         if(text.includes(tag))
         {return true}
