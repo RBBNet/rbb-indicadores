@@ -26,11 +26,21 @@ const PERIOD_REGEX = /^01\/(0[1-9]|1[0-2])\/20\d{2}$/;
 main();
 
 async function main() {
-    // TODO obter e validar parâmetros da linha de comando
+
+    if(process.argv.length != 4){
+        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>\n');
+        return;
+    }
+
+    // TODO validar parâmetros de entrada
     
-    const refMonth = 1;
-    const refYear = 2025;
-    const initiativesFileName = path.join(TEMP_DIR, RESULT_FILE);
+    const refPeriod = process.argv[2];
+    const refPeriodParts = refPeriod.split('/');
+    const refMonth = refPeriodParts[0];
+    const refYear = refPeriodParts[1];
+    const initiativesFileName = process.argv[3];
+
+    console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}`);
     
     if (!fs.existsSync(initiativesFileName)) {
         console.error(`Erro: O arquivo ${initiativesFileName} não foi encontrado`);
