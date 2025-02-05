@@ -21,6 +21,7 @@ const ANDAMENTO = 'Andamento';
 const SEM_ANDAMENTO = 'Sem_andamento';
 const NAO_INICIADO = 'Nao_iniciado';
 const ENCERRADO = 'Encerrado';
+const PERIOD_MES_ANO = /(0[1-9]|1[0-2])\/20\d{2}$/;
 const PERIOD_REGEX = /^01\/(0[1-9]|1[0-2])\/20\d{2}$/;
 
 main();
@@ -31,22 +32,29 @@ async function main() {
         console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>\n');
         return;
     }
-
-    // TODO validar parâmetros de entrada
-    
     const refPeriod = process.argv[2];
     const refPeriodParts = refPeriod.split('/');
-    const refMonth = refPeriodParts[0];
-    const refYear = refPeriodParts[1];
-    const initiativesFileName = process.argv[3];
-
-    console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}`);
-    
-    if (!fs.existsSync(initiativesFileName)) {
-        console.error(`Erro: O arquivo ${initiativesFileName} não foi encontrado`);
+    //Valida o formato do período de referência e verifica se é um arquivo .csv
+    if (!PERIOD_MES_ANO.test(refPeriod)) {
+        console.error(`Erro: O período de referência ${refPeriod} não obedece o padrão MM/AAAA`);
         process.exit(1);
     }
-    console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...`);
+    const initiativesFileName = process.argv[3];
+    if (!fs.existsSync(initiativesFileName)) {
+        console.error(`Erro: O arquivo ${initiativesFileName} não foi encontrado\n`);
+        process.exit(1);
+    }
+    if(!initiativesFileName.endsWith('.csv')) {
+        console.error(`Erro: O arquivo ${initiativesFileName} não é um arquivo CSV\n`);
+        process.exit(1);
+    }
+
+    const refMonth = refPeriodParts[0];
+    const refYear = refPeriodParts[1];
+
+    console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
+    console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
+
     const initiatives = await loadInitiatives(initiativesFileName);
     // Descobre a coluna do CSV que corresponde ao período de referência
     const refColumn = getRefColumn(initiatives, refMonth, refYear);
