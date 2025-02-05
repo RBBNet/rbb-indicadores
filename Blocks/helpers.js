@@ -61,8 +61,8 @@ function validate_date(date){
     return !(date > today);
 }
  function write_csv(header, data) {
-    // Cria o arquivo CSV com o cabeçalho e os dados
-    const resultsFolder = path.join('.', 'Blocks', 'results');
+    // Cria o arquivo csv e a pasta de resultados 
+    const resultsFolder = path.join('.', 'result');
     if (!fs.existsSync(resultsFolder)) {
         fs.mkdirSync(resultsFolder, { recursive: true });
     }
