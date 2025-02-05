@@ -1,6 +1,7 @@
 import functions from './issueFunctions.js';
 import fs from 'fs';
 import path from 'path';
+import { exit } from 'process';
 let labels = ['incidente','incidente-critico', 'vulnerabilidade','vulnerabilidade-critica'];
 
 async function listIssues() {
@@ -8,7 +9,7 @@ async function listIssues() {
 
         if(process.argv.length != 4){
             console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node issue-metrics.js <data-inicial> <data-final>\n');
-            return;
+            exit(1);
         }
 
         let date_first = process.argv[2];
@@ -18,13 +19,13 @@ async function listIssues() {
         date_first = functions.string_to_date(date_first);
         if (functions.validate_date(date_first) === false) {
             console.log("Por favor, insira uma data válida. O formato esperado é DD/MM/AAAA");
-            return
+            exit(1);
         } 
         
         date_last = functions.string_to_date(date_last);
         if (functions.validate_date(date_last) === false) {
             console.log("Por favor, insira uma data válida. O formato esperado é DD/MM/AAAA");
-            return
+            exit(1);
         } 
         
         let fileData = 'number;title;labels;assignees;daysOpen';
@@ -55,7 +56,7 @@ async function listIssues() {
 
             if (issues.length > 0) {
                 issues.forEach(issue => {
-                    fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen}`;
+                    fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
                 });
 
                 console.table(issues);
@@ -64,7 +65,7 @@ async function listIssues() {
             }  
         }
 
-        const resultsFolder = path.join('.', 'Issues', 'results');
+        const resultsFolder = path.join('.', 'Issues', 'result');
         if (!fs.existsSync(resultsFolder)) {
             fs.mkdirSync(resultsFolder, { recursive: true });
         }
