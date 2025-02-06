@@ -30,3 +30,7 @@ Para instalar as dependências desse projeto basta utilizar o seguinte comando n
 ```javascript
 npm install
 ```
+Para instalar as dependências python para a ferramenta Projects, basta utilizar o seguinte comando em sua console de preferência:
+```bash
+pip install pandas openpyxl
+```
