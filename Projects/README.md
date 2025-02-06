@@ -1,8 +1,11 @@
 # Acompanhamento das Iniciativas de Maturação do Piloto
+
 Essa ferramenta realiza consultas ao GitHub, através de sua API, para extração de dados relativos ao projeto de Maturação do Piloto, para acompanhamento das atividades.
 
-# Requisitos
-Para utilizar essa ferramenta é necessário: 
+## Requisitos
+
+Para utilizar essa ferramenta é necessário:
+
 - Satisfazer as condições gerais de utilização presentes no [README do projeto](../README.md)
 - **Possuir acesso ao projeto** (Kanbam) requisitado.
   - É necessário configurar um **token de acesso** à API do GitHub com os seguintes escopos:
@@ -15,22 +18,34 @@ Para utilizar essa ferramenta é necessário:
   - `PROJECT_NUMBER`: `4`
 
 ## Utilização
+
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 
 ```bash
 node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>
 ```
 
+Onde:
+
+- `<mes-referencia>` e `<ano-referencia>` determinam o período de tempo a ser analizado.
+  - `<mes-referencia>` deve ser posterior ou igual ao `<data final>`.
+  - `<data final>` deve ser anterior ou igual à data corrente.
+  - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
+
 ## Funcionamento
+
 ### 1. Carga de dados
+
 A primeira etapa consiste em duas consultas à API do Github, uma de acesso ao Kanbam, a fim de obter as issues associadas aos Cards, e outra para obter os eventos de timeline dessas issues. Durante a execução serão gerados dois arquivos no diretório `Projects/tmp`, uma para as issues associadas aos cards e outro para os eventos dessas issues.
 
 ### 2. Processamento das informações
+
 Passada essa etapa, os arquivos serão processados a fim de registrar o status das iniciativas. Para isso, são utilizados quatro códigos, cada um representando uma situação:
- - **Andamento**, se houve progresso no mês de registro
- - **Sem_andamento**, se houve progresso no mês anterior, mas não no mês de registro
- - **Nao_iniciado**, se nunca houve progresso algum
- - **Encerrado**, se a iniciativa for encerrada
+
+- **Andamento**, se houve progresso no mês de registro
+- **Sem_andamento**, se houve progresso no mês anterior, mas não no mês de registro
+- **Nao_iniciado**, se nunca houve progresso algum
+- **Encerrado**, se a iniciativa for encerrada
 
 Essa etapa consiste em iterar a coluna dos IDs das iniciativas cadastradas, a fim de encontrar issues com esses IDs em seus títulos, já que a relação entre **Iniciativa X Issue** é da ordem de **1:N**.
 Quando a ferramenta encontra uma issue que referencia o ID em questão, acessa os comentários dessa issue, a fim de buscar algum com a tag `#andamento`, o marcador de progresso, e atribuir o valor **ANDAMENTO** a esse evento, conferindo progresso à issue.
@@ -46,4 +61,5 @@ Essa etapa consiste em ordenar os eventos por issue, mês e valor de progresso a
 Por exemplo, se houver duas issues referenciando um mesmo ID, porém uma registra progresso em um mês e a outra não, permanecerá aquela no registro, e essa será eliminada.
 
 ### 4. Registro dos resultados
+
 Por fim, os valores são atualizados na estrutura de dados que espelha a base de dados das iniciativas, a qual, em seguida, é salva em arquivo `.csv`, que pode ser acessado pelo caminho: `Projects/result/iniciativas_updated.csv`.
