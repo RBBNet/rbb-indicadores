@@ -1,263 +1,262 @@
 import math
 import random
-import argparse
 import numpy as np
-
+from dotenv import load_dotenv
+import os
 
 # ---------------------------------------------------------------------
-# Função para simular se o validador está online ou offline e, se offline,
-# por quanto tempo ficará fora de operação.
+# 1. Validador (Online/Offline)
+# ---------------------------------------------------------------------
 def validador_esta_online(prob_falha, media, desvio_padrao):
+    """
+    Decide se o validador está online.
+    Se falhar, gera o tempo de queda (em segundos) com base numa distribuição normal.
+    """
     if random.random() < prob_falha:
         rng = np.random.default_rng()
-        tempo_falha = int(rng.normal(media, desvio_padrao))
-        tempo_falha = abs(tempo_falha)
-        return False, tempo_falha * 3600  # conversão para segundos
+        # Gera tempo de falha em horas, converte para segundos
+        tempo_falha = abs(rng.normal(media, desvio_padrao))
+        return False, int(tempo_falha * 3600)
     else:
         return True, 0
 
 
 # ---------------------------------------------------------------------
-# Função para simular se o "dono" do validador compareceu à reunião.
+# 2. Reuniões de Validadores
+# ---------------------------------------------------------------------
 def reuniao(prob_comparecimento):
+    """Define se o dono do validador comparece à reunião."""
     return random.random() < prob_comparecimento
 
 
-# ---------------------------------------------------------------------
-# Função que verifica se já passou das 11 horas (horário de simulação)
-def ja_passou_das_11(contador):
-    if contador < 1e18:
-        resultado_div = contador / 3600
-    else:
-        return False
+def verificar_11h(sim_time):
+    """
+    Retorna True se o horário simulado for exatamente 11:00:00.
+    Um dia tem 86400 segundos.
+    """
+    segundos_dia = 86400
+    hora = (sim_time % segundos_dia) // 3600
+    minuto = ((sim_time % segundos_dia) % 3600) // 60
+    segundo = ((sim_time % segundos_dia) % 3600) % 60
+    return (hora == 11) and (minuto == 0) and (segundo == 0)
 
-    if resultado_div % 24 >= 11:
-        return True
-    return False
 
-
-# ---------------------------------------------------------------------
-# Verifica se exatamente é 11h (para agendamento exato da reunião)
-def verificar_11h(contador):
-    if contador < 1e18:
-        resultado_div = contador / 3600
-    else:
-        return False
-
-    if resultado_div % 24 == 11 and contador % 3600 == 0:
-        return True
-    return False
+def ja_passou_das_11(sim_time):
+    """
+    Retorna True se já passaram as 11 horas no dia da simulação.
+    """
+    segundos_dia = 86400
+    hora = (sim_time % segundos_dia) // 3600
+    return hora >= 11
 
 
 # ---------------------------------------------------------------------
-# Atualiza o estado de cada validador: se estiver offline, decrementa o tempo
-# de falha; se estiver online, sorteia uma nova condição (online/offline).
-def atualizar_estado_validadores(validadores, prob_falha, media, desvio_padrao, block_period):
-    online_validators = 0
-
-    for validador in validadores:
-        if not validador["online"]:
-            if validador["tempo_falha"] <= 0:
-                validador["online"] = True
-                validador["tempo_falha"] = 0
-            else:
-                validador["tempo_falha"] -= block_period
+# 3. Atualização do Estado dos Validadores
+# ---------------------------------------------------------------------
+def atualizar_estado_validadores(validadores, prob_falha, media, desvio_padrao, delta_t):
+    """
+    Atualiza o estado de cada validador:
+      - Se offline, decrementa seu tempo de falha (delta_t segundos);
+        se o tempo de falha chega a zero, o validador volta a ficar online.
+      - Se online, sorteia se ele falha agora e, se sim, define seu tempo de queda.
+    Retorna o número de validadores online.
+    """
+    online_count = 0
+    for v in validadores:
+        if not v["online"]:
+            v["time_failure"] -= delta_t
+            if v["time_failure"] <= 0:
+                v["online"] = True
+                v["time_failure"] = 0
         else:
             online, tempo_falha = validador_esta_online(prob_falha, media, desvio_padrao)
-            validador["online"] = online
-            validador["tempo_falha"] = tempo_falha if not online else 0
+            v["online"] = online
+            v["time_failure"] = tempo_falha if not online else 0
 
-        if validador["online"]:
-            online_validators += 1
-
-    return online_validators
+        if v["online"]:
+            online_count += 1
+    return online_count
 
 
 # ---------------------------------------------------------------------
-# Função para remover validadores offline em reunião
-def remover_validador_offline(validadores, validadores_removidos, horario_atual):
-    for i in range(len(validadores)):
-        if not validadores[i]["online"]:
-            print(
-                f"Validador {validadores[i]['id']} sendo removido - {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-            validadores_removidos.append(validadores[i])
+# 4. Remoção e Readição de Validadores
+# ---------------------------------------------------------------------
+def remover_validador_offline(validadores, removed_validators, sim_time, eventos):
+    """
+    Durante a reunião, remove (apenas um) validador offline e o move para a lista de removidos.
+    """
+    for i, v in enumerate(validadores):
+        if not v["online"]:
+            eventos.append(f"[{format_time(sim_time)}] Removendo validador {v['id']} (offline).")
+            removed_validators.append(v)
             del validadores[i]
             break
 
 
-# ---------------------------------------------------------------------
-# Função para adicionar validadores removidos, se estiverem online
-def adicionar_validador_online(validadores, validadores_removidos, horario_atual):
-    for validador in validadores_removidos[:]:
-        if validador["online"]:
-            print(
-                f"Validador {validador['id']} sendo adicionado de volta - {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-            validadores.append(validador)
-            validadores_removidos.remove(validador)
+def adicionar_validador_online(validadores, removed_validators, sim_time, eventos):
+    """
+    Durante a reunião, se um validador removido já estiver online, ele é re-adicionado à rede.
+    """
+
+    for v in removed_validators:
+        if v["online"]:
+            eventos.append(f"[{format_time(sim_time)}] Re-adicionando validador {v['id']} (online).")
+            validadores.append(v)
+            removed_validators.remove(v)
 
 
 # ---------------------------------------------------------------------
-# Reinicia a rede, colocando todos os validadores online e registrando o evento.
-def reiniciar_rede(validadores, eventos_importantes, horario_atual):
-    eventos_importantes.append(
-        {'Restart': f"{horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}"}
-    )
-    for validador in validadores:
-        validador["online"] = True
+# 5. Reinício da Rede
+# ---------------------------------------------------------------------
+def reiniciar_rede(validadores, sim_time):
+    """
+    Reinicia a rede: todos os validadores passam a estar online e o tempo de queda é resetado.
+    """
+    for v in validadores:
+        v["online"] = True
+        v["time_failure"] = 0
 
 
 # ---------------------------------------------------------------------
-# Função principal de simulação. Infelizmente ainda é um Golias.
-def main(days, offline_probability, validators, block_period, request_timeout_base, media, desvio_padrao,
-         prob_comparecimento):
-    # Inicializa os validadores
-    validadores = [{"id": i, "online": True, "tempo_falha": 0} for i in range(validators)]
-    quorum_para_bloco = math.floor(len(validadores) * 2 / 3)
+# Função utilitária para formatar o tempo (em segundos) como hh:mm:ss. Bem melhor do que fazer a conversão na marra.
+# ---------------------------------------------------------------------
+def format_time(sim_time):
+    horas = sim_time // 3600
+    minutos = (sim_time % 3600) // 60
+    segundos = sim_time % 60
+    return f"{horas:02d}:{minutos:02d}:{segundos:02d}"
+
+
+# ---------------------------------------------------------------------
+# 6. Produção de Blocos e Simulação Geral (sem laços aninhados)
+# ---------------------------------------------------------------------
+def main(days, offline_probability, total_validators, block_period, request_timeout_base,
+         mean, desvio_padrao, meeting_probability):
+    """
+    Executa a simulação do sistema blockchain QBFT.
+
+    Parâmetros:
+      - days: dias a serem simulados.
+      - offline_probability: probabilidade de falha dos validadores.
+      - total_validators: número total de validadores inicialmente.
+      - block_period: intervalo (em segundos) entre produções de blocos.
+      - request_timeout_base: timeout base (em segundos) para tentativa de produção de bloco.
+      - mean: média (em horas) do tempo de queda dos validadores.
+      - desvio_padrao: desvio padrão (em horas) do tempo de queda.
+      - meeting_probability: probabilidade de comparecimento à reunião.
+
+    Retorna:
+      - sim_time: tempo total de simulação (em segundos).
+      - blocos_totais: número de blocos produzidos.
+    """
+    # Inicialização dos validadores
+    validadores = [{"id": i, "online": True, "time_failure": 0} for i in range(total_validators)]
+    removed_validators = []  # validadores removidos em reuniões
+
     blocos_totais = 0
-    tempo_total = 0
-    segundos_por_dia = 24 * 3600
-    horario_atual = 0
-    eventos_importantes = []
-    validadores_removidos = []
-    request_timeout_mutavel = request_timeout_base
-    # Contador de tentativas consecutivas de produção com validador offline (para timeout exponencial)
-    contador_timeout = 0
+    sim_time = 0
+    segundos_por_dia = 86400
+    quorum = math.floor(len(validadores) * 2 / 3)
 
-    while True:
-        # Atualiza o estado dos validadores ativos
-        online_validators = atualizar_estado_validadores(validadores, offline_probability, media, desvio_padrao,
-                                                         block_period)
+    # Variáveis para controle de timeout e seleção round-robin
+    request_timeout = request_timeout_base
+    attempts = 0  # número de tentativas consecutivas sem produzir bloco
+    next_validator_index = 0
 
-        # Atualiza o estado dos validadores removidos (mesmo processo de decremento de tempo)
-        for validador in validadores_removidos:
-            if validador["tempo_falha"] > 0:
-                validador["tempo_falha"] -= block_period
-            if validador["tempo_falha"] <= 0:
-                validador["online"] = True
-                validador["tempo_falha"] = 0
+    eventos = []
 
-        # Se houver algum validador offline e for horário de reunião (11h exato), tenta removê-los
-        if any(not v["online"] for v in validadores) and verificar_11h(horario_atual):
-            eventos_importantes.append(
-                {'Reunião': f"{horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}"}
-            )
-            comparecimento = [reuniao(prob_comparecimento) for _ in validadores]
-            if sum(comparecimento) / len(comparecimento) >= 0.51:
-                remover_validador_offline(validadores, validadores_removidos, horario_atual)
+    #
+    while sim_time < days * segundos_por_dia:
+        online_count = atualizar_estado_validadores(validadores, offline_probability, mean, desvio_padrao, block_period)
 
-        # Se houver validadores removidos, em horário de reunião tenta re-adicioná-los
-        if validadores_removidos and verificar_11h(horario_atual):
-            comparecimento = [reuniao(prob_comparecimento) for _ in validadores]
-            if sum(comparecimento) / len(comparecimento) >= 0.51:
-                adicionar_validador_online(validadores, validadores_removidos, horario_atual)
+        for v in removed_validators:
+            if not v["online"]:
+                v["time_failure"] -= block_period
+                if v["time_failure"] <= 0:
+                    v["online"] = True
+                    v["time_failure"] = 0
 
-        # Se o número de validadores offline for maior do que 2/3 da rede, aumenta o request timeout
-        if len(validadores) - online_validators > len(validadores) // 3:
-            request_timeout_mutavel *= 2
+        if verificar_11h(sim_time):
+            presencas = [reuniao(meeting_probability) for _ in validadores]
+            if (sum(presencas) / len(validadores)) >= 0.5:
+                if any(not v["online"] for v in validadores):
+                    remover_validador_offline(validadores, removed_validators, sim_time, eventos)
+                adicionar_validador_online(validadores, removed_validators, sim_time, eventos)
 
-        # Se houver quórum para produção de bloco, tenta produzir o bloco
-        if online_validators >= quorum_para_bloco:
-            # Escolhe o produtor inicial baseado na rotação
-            indice_inicial = blocos_totais % len(validadores)
-            indice_atual = indice_inicial
-            tentativa = 0
-            bloco_produzido = False
+        # Se houver quórum suficiente, tenta produzir um bloco. ISSO É ROUND ROBIN!!!!
+        # A produção de blocos, dessa forma, está atrelada aos outros eventos.
+        if online_count >= quorum and len(validadores) > 0:
+            candidato = validadores[next_validator_index % len(validadores)]
+            next_validator_index += 1
 
-            # Tenta, em ordem circular, encontrar um validador online para produzir o bloco.
-            while tentativa < len(validadores):
-                candidato = validadores[indice_atual]
-                if candidato["online"]:
-                    # Validador online encontrado: produz bloco.
-                    contador_timeout = 0
-                    request_timeout_mutavel = request_timeout_base
-                    blocos_totais += 1
-                    tempo_bloco = block_period
-                    tempo_total += tempo_bloco
-                    horario_atual += tempo_bloco
-                    bloco_produzido = True
-                    break
-                else:
-                    # Se o candidato estiver offline, incrementa timeout e tenta o próximo
-                    contador_timeout += 1
-                    timeout_incremento = request_timeout_mutavel * (2 ** (contador_timeout - 1))
-                    tempo_incremento = block_period + timeout_incremento
-                    tempo_total += tempo_incremento
-                    horario_atual += tempo_incremento
-                    # print(
-                    #     f"Validador {candidato['id']} offline. Tentativa {tentativa + 1} com timeout {timeout_incremento} segundos. Novo horário: {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-
-                    # Passa para o próximo validador na ordem circular
-                    indice_atual = (indice_atual + 1) % len(validadores)
-                    tentativa += 1
-
-            # Se nenhum validador online for encontrado (mesmo havendo quórum teoricamente), apenas espera
-            if not bloco_produzido:
-                print(
-                    f"Nenhum validador disponível para produzir o bloco às {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-                horario_atual += request_timeout_mutavel
-
+            if candidato["online"]:
+                blocos_totais += 1
+                sim_time += block_period
+                attempts = 0
+                request_timeout = request_timeout_base
+            else:
+                attempts += 1  # Útil para calcular o request_timeout. É um outro approach, mas funciona.
+                incremento = request_timeout * (2 ** (attempts - 1))
+                sim_time += block_period + incremento
+                eventos.append(f"[{format_time(sim_time)}] Validador {candidato['id']} offline.")
         else:
-            # Sem quórum para produção de bloco: espera o timeout
-            print(
-                f"Sem quórum para produção de bloco às {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-            horario_atual += request_timeout_mutavel
-            # Se já passou das 11h (ainda que não seja exato), pode reiniciar a rede
-            if ja_passou_das_11(horario_atual):
-                comparecimento = [reuniao(prob_comparecimento) for _ in validadores]
-                if sum(comparecimento) / len(comparecimento) >= 0.51:
-                    print(
-                        f"Reinício da rede às {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-                    reiniciar_rede(validadores, eventos_importantes, horario_atual)
-                    request_timeout_mutavel = request_timeout_base
+            # Sem quórum
+            if (len(validadores) - online_count) > (len(validadores) // 3):
+                request_timeout *= 2
+            eventos.append(f"[{format_time(sim_time)}] Quorum insuficiente (online: {online_count} de {len(validadores)}). Aguardando {request_timeout} segundos.")
+            sim_time += request_timeout
+            if ja_passou_das_11(sim_time) or verificar_11h(sim_time):
+                presencas = [reuniao(meeting_probability) for _ in validadores]
+                if (sum(presencas) / len(validadores)) >= 0.5:
+                    reiniciar_rede(validadores, sim_time)
+                    eventos.append(f"[{format_time(sim_time)}] Reinício da rede")
+                    request_timeout = request_timeout_base
 
-        # Verificação de dias simulados
-        dias_simulados = horario_atual // segundos_por_dia
-        if dias_simulados >= days:
-            break
-
-    print(f"\nHorário de fim: {horario_atual // 3600}:{(horario_atual % 3600) // 60}:{horario_atual % 60}")
-    blocos_esperados = (days * segundos_por_dia) / block_period
-    print(f"Quantidade esperada de blocos: {blocos_esperados}")
-    print(f"Quantidade real de blocos: {blocos_totais}")
-    print(f"Taxa (blocos/s): {tempo_total/blocos_totais}")
-    return [tempo_total/blocos_totais, eventos_importantes]
+    print("\n=== Resultado da Simulação ===")
+    print(f"Tempo total simulado: {format_time(sim_time)}")
+    print(f"Blocos produzidos: {blocos_totais}")
+    print("Eventos ocorridos: ", eventos)
+    return sim_time, blocos_totais, eventos
 
 
 # ---------------------------------------------------------------------
-# Execução via linha de comando
+# 7. Execução da simulação via .env
+# ---------------------------------------------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Simulação de blockchain QBFT com tempo de simulação próprio.")
 
-    parser.add_argument("--days", type=int, required=True, help="Quantidade de dias a serem simulados.")
-    parser.add_argument("--offline_probability", type=float, required=True,
-                        help="Probabilidade de queda dos validadores.")
-    parser.add_argument("--validators", type=int, required=True, help="Quantidade de validadores.")
-    parser.add_argument("--block_period", type=int, required=True, help="Intervalo de produção de blocos em segundos.")
-    parser.add_argument("--request_timeout", type=int, required=True,
-                        help="Valor base de timeout em caso de falha na produção de bloco.")
-    parser.add_argument("--mean", type=float, required=True, help="Média de tempo de queda dos validadores (em horas).")
-    parser.add_argument("--standart_deviation", type=float, required=True,
-                        help="Desvio padrão para tempo de queda (em horas).")
-    parser.add_argument("--meeting_probability", type=float, required=True,
-                        help="Probabilidade de comparecimento à reunião.")
-    parser.add_argument("--range", type=int, required=True, help="Quantidade de iterações da simulação.")
+    load_dotenv()
 
-    args = parser.parse_args()
+    days = int(os.getenv("DAYS"))
+    offline_probability = float(os.getenv("OFFLINE_PROBABILITY"))
+    validators = int(os.getenv("VALIDATORS"))
+    block_period = int(os.getenv("BLOCK_PERIOD"))
+    request_timeout = int(os.getenv("REQUEST_TIMEOUT"))
+    mean = float(os.getenv("MEAN"))  # em horas
+    standart_deviation = float(os.getenv("STANDART_DEVIATION"))  # em horas
+    meeting_probability = float(os.getenv("MEETING_PROBABILITY"))
+    sim_range = int(os.getenv("RANGE"))
+
     resultados = []
-    for i in range(args.range):
-        print(f"\n=== ITERAÇÃO {i} COM {args.offline_probability * 100}% DE PROBABILIDADE DE QUEDA ===")
-        res_iteracao, eventos_importantes = main(
-            args.days,
-            args.offline_probability,
-            args.validators,
-            args.block_period,
-            args.request_timeout,
-            args.mean,
-            args.standart_deviation,
-            args.meeting_probability
+    for i in range(sim_range):
+        print(f"\n========== Iteração {i + 1} ==========")
+        sim_time, blocos, eventos = main(
+            days=days,
+            offline_probability=offline_probability,
+            total_validators=validators,
+            block_period=block_period,
+            request_timeout_base=request_timeout,
+            mean=mean,
+            desvio_padrao=standart_deviation,
+            meeting_probability=meeting_probability
         )
-        resultados.append(res_iteracao)
-        print("Eventos importantes:", eventos_importantes)
+        resultados.append((sim_time, blocos, eventos))
 
-    media_tempo_bloco = np.mean(resultados)
-    print(f"\nMédia de segundos para 1 bloco: {media_tempo_bloco}")
+    tempos = [res[0] for res in resultados]
+    blocos_totais = [res[1] for res in resultados]
+    eventos = [res[2] for res in resultados]
+    media_tempo = sum(tempos) / len(tempos)
+    media_blocos = sum(blocos_totais) / len(blocos_totais)
+
+    print("\n========== Estatísticas das Iterações ==========")
+    print(f"Média de tempo de produção de blocos: {media_tempo/media_blocos} segundos")
+    print(f"Média de blocos produzidos: {media_blocos:.2f}")
