@@ -28,7 +28,7 @@ async function listIssues() {
             exit(1);
         } 
         
-        let fileData = 'number;title;labels;assignees;daysOpen';
+        let fileData = 'title;labels;assignees;daysOpen;state';
         for (const label of labels) {
 
             /*
@@ -56,7 +56,7 @@ async function listIssues() {
 
             if (issues.length > 0) {
                 issues.forEach(issue => {
-                    fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
+                    fileData += `\n${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
                 });
 
                 console.table(issues);
