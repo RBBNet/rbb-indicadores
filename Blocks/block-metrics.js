@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { ethers } from 'ethers';
 import helpers from './helpers.js';
-import nodeFunctions from './nodeFunctions.js';
+import nodeFunctions from './node-functions.js';
 import fs from 'fs';
 import { addDays } from 'date-fns';
 

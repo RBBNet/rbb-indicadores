@@ -3,6 +3,7 @@ import { addDays } from 'date-fns';
 import EthDater from 'ethereum-block-by-date';
 import { stringify } from 'csv-stringify';
 import path from 'path';
+
 function lerArquivo(nomeArquivo) {
     try {
         const data = fs.readFileSync(nomeArquivo, 'utf8');
@@ -18,8 +19,6 @@ function subtractDays (days) {
         - (days * 24 * 60 * 60 * 1000));
     return this;
 }
-
-
 
 async function gets_block_number_by_date(date, provider) {
     const dater = new EthDater(provider);
@@ -60,14 +59,15 @@ function validate_date(date){
 
     return !(date > today);
 }
- function write_csv(header, data) {
+
+function write_csv(header, data) {
     // Cria o arquivo csv e a pasta de resultados 
     const resultsFolder = path.join('.', 'result');
     if (!fs.existsSync(resultsFolder)) {
         fs.mkdirSync(resultsFolder, { recursive: true });
     }
     
-    const fileName = 'IndiceProducaoBlocos.csv';
+    const fileName = 'Blocos.csv';
     const filePath = path.join(resultsFolder, fileName);
 
     console.log(`\nGerando Arquivo ${fileName}...`);
