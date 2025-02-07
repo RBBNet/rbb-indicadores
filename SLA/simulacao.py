@@ -287,3 +287,6 @@ if __name__ == "__main__":
     print("\n========== Estatísticas das Iterações ==========")
     print(f"Média de tempo de produção de blocos: {media_tempo / media_blocos} segundos")
     print(f"Média de blocos produzidos: {media_blocos:.2f}")
+    print("Porcentagem de blocos válidos:")
+    for i in range(len(blocos_totais)):
+        print(f"Iteração {i} - {blocos_totais[i]/blocos_esperados}")
