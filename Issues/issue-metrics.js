@@ -1,4 +1,4 @@
-import functions from './issueFunctions.js';
+import functions from './issue-functions.js';
 import fs from 'fs';
 import path from 'path';
 import { exit } from 'process';
@@ -28,7 +28,7 @@ async function listIssues() {
             exit(1);
         } 
         
-        let fileData = 'title;labels;assignees;daysOpen;state';
+        let fileData = 'number;title;labels;assignees;daysOpen;state';
         for (const label of labels) {
 
             /*
@@ -56,7 +56,7 @@ async function listIssues() {
 
             if (issues.length > 0) {
                 issues.forEach(issue => {
-                    fileData += `\n${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
+                    fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
                 });
 
                 console.table(issues);

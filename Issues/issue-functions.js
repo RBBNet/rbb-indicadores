@@ -44,11 +44,12 @@ function cleanIssues(response, date_last){
         const updateDate = new Date(issue.updated_at);
         if(updateDate.valueOf() <= date_last.valueOf()){
             return {
+                'number': issue.number,
                 'title': issue.title,
                 'labels': issue.labels.map(label => label.name),
                 'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
                 'daysOpen': issue.closed_at == null ? calculateDaysOpen(issue.created_at) : calculateDaysOpen(issue.created_at, issue.closed_at),
-                'state': issue.state == 'open' ? 'open' : 'closed'
+                'state': issue.state
             }
         }
         return null;
