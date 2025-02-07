@@ -4,9 +4,8 @@ import fs from 'fs';
 import path from 'path';
 import papa from 'papaparse';
 
-const TEMP_DIR = 'tmp';
 const RESULT_DIR = 'result';
-const RESULT_FILE = 'iniciativas_updated.csv';
+const RESULT_FILE = 'Iniciativas_updated.csv';
 const HEADER_ROW = 0;
 const FIRST_DATA_ROW = HEADER_ROW + 1;
 const ID_COLUMN = 0;
@@ -170,7 +169,7 @@ async function writeTimelineCSV(activeIssues) {
             fileData.push([timelineEvent.issue_id, timelineEvent.id, timelineEvent.event, timelineEvent.event_created_at.toISOString(), timelineEvent.user, timelineEvent.body]);
         });
     });
-    await writeCsv(TEMP_DIR, 'Comentarios.csv', fileData);
+    await writeCsv(RESULT_DIR, 'Comentarios.csv', fileData);
 }
 
 async function writeIssueCSV(activeIssues) {
@@ -181,7 +180,7 @@ async function writeIssueCSV(activeIssues) {
         const issue = activeIssue.issue;
         fileData.push([issue.issue_id, issue.title]);
     });
-    await writeCsv(TEMP_DIR, 'Issues.csv', fileData);
+    await writeCsv(RESULT_DIR, 'Issues.csv', fileData);
 }
 
 async function writeCsv(fileDir, fileName, fileData) {

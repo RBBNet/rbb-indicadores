@@ -3,7 +3,7 @@ import { fetch , ProxyAgent } from 'undici';
 import helpers from './helpers.js'
 
 import fs from 'fs';
-const Config = JSON.parse(fs.readFileSync('../config.json', 'utf8'));
+const Config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const proxyurl = Config.PROXY_URL;
 
 let octokit;
