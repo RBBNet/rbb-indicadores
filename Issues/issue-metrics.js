@@ -1,4 +1,4 @@
-import functions from './issueFunctions.js';
+import functions from './issue-functions.js';
 import fs from 'fs';
 import path from 'path';
 import { exit } from 'process';
