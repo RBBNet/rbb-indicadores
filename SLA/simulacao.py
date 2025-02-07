@@ -3,6 +3,8 @@ import random
 import numpy as np
 from dotenv import load_dotenv
 import os
+import argparse
+
 
 # ---------------------------------------------------------------------
 # 1. Validador (Online/Offline)
@@ -81,25 +83,32 @@ def atualizar_estado_validadores(validadores, prob_falha, media, desvio_padrao, 
 # ---------------------------------------------------------------------
 # 4. Remoção e Readição de Validadores
 # ---------------------------------------------------------------------
-def remover_validador_offline(validadores, removed_validators, sim_time, eventos):
+def remover_validador_offline(validadores, removed_validators, sim_time, eventos, debug):
     """
     Durante a reunião, remove (apenas um) validador offline e o move para a lista de removidos.
     """
     for i, v in enumerate(validadores):
         if not v["online"]:
+            if debug:
+                print(f"[{format_time(sim_time)}] Removendo validador {v['id']} (offline).")
+
             eventos.append(f"[{format_time(sim_time)}] Removendo validador {v['id']} (offline).")
+
             removed_validators.append(v)
+
             del validadores[i]
             break
 
 
-def adicionar_validador_online(validadores, removed_validators, sim_time, eventos):
+def adicionar_validador_online(validadores, removed_validators, sim_time, eventos, debug):
     """
     Durante a reunião, se um validador removido já estiver online, ele é re-adicionado à rede.
     """
 
     for v in removed_validators:
         if v["online"]:
+            if debug:
+                print(f"[{format_time(sim_time)}] Re-adicionando validador {v['id']} (online).")
             eventos.append(f"[{format_time(sim_time)}] Re-adicionando validador {v['id']} (online).")
             validadores.append(v)
             removed_validators.remove(v)
@@ -131,7 +140,7 @@ def format_time(sim_time):
 # 6. Produção de Blocos e Simulação Geral (sem laços aninhados)
 # ---------------------------------------------------------------------
 def main(days, offline_probability, total_validators, block_period, request_timeout_base,
-         mean, desvio_padrao, meeting_probability):
+         mean, desvio_padrao, meeting_probability, debug):
     """
     Executa a simulação do sistema blockchain QBFT.
 
@@ -180,8 +189,8 @@ def main(days, offline_probability, total_validators, block_period, request_time
             presencas = [reuniao(meeting_probability) for _ in validadores]
             if (sum(presencas) / len(validadores)) >= 0.5:
                 if any(not v["online"] for v in validadores):
-                    remover_validador_offline(validadores, removed_validators, sim_time, eventos)
-                adicionar_validador_online(validadores, removed_validators, sim_time, eventos)
+                    remover_validador_offline(validadores, removed_validators, sim_time, eventos, debug)
+                adicionar_validador_online(validadores, removed_validators, sim_time, eventos, debug)
 
         # Se houver quórum suficiente, tenta produzir um bloco. ISSO É ROUND ROBIN!!!!
         # A produção de blocos, dessa forma, está atrelada aos outros eventos.
@@ -194,21 +203,30 @@ def main(days, offline_probability, total_validators, block_period, request_time
                 sim_time += block_period
                 attempts = 0
                 request_timeout = request_timeout_base
+                if debug:
+                    print(f"Bloco {blocos_totais} produzido por validador {candidato["id"]}")
             else:
                 attempts += 1  # Útil para calcular o request_timeout. É um outro approach, mas funciona.
                 incremento = request_timeout * (2 ** (attempts - 1))
                 sim_time += block_period + incremento
+                if debug:
+                    print(f"[{format_time(sim_time)}] Validador {candidato['id']} offline. Não produziu bloco.")
                 eventos.append(f"[{format_time(sim_time)}] Validador {candidato['id']} offline.")
         else:
             # Sem quórum
             if (len(validadores) - online_count) > (len(validadores) // 3):
                 request_timeout *= 2
-            eventos.append(f"[{format_time(sim_time)}] Quorum insuficiente (online: {online_count} de {len(validadores)}). Aguardando {request_timeout} segundos.")
+            if debug:
+                print(f"[{format_time(sim_time)}] Quorum insuficiente (online: {online_count} de {len(validadores)}). Aguardando {request_timeout} segundos.")
+            eventos.append(
+                f"[{format_time(sim_time)}] Quorum insuficiente (online: {online_count} de {len(validadores)}). Aguardando {request_timeout} segundos.")
             sim_time += request_timeout
             if ja_passou_das_11(sim_time) or verificar_11h(sim_time):
                 presencas = [reuniao(meeting_probability) for _ in validadores]
                 if (sum(presencas) / len(validadores)) >= 0.5:
                     reiniciar_rede(validadores, sim_time)
+                    if debug:
+                        print(f"[{format_time(sim_time)}] Reinício da rede")
                     eventos.append(f"[{format_time(sim_time)}] Reinício da rede")
                     request_timeout = request_timeout_base
 
@@ -223,8 +241,12 @@ def main(days, offline_probability, total_validators, block_period, request_time
 # 7. Execução da simulação via .env
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
-
+    parser = argparse.ArgumentParser(description="Simulação de blockchain QBFT com tempo de simulação próprio.")
+    parser.add_argument("--debug", type=bool, required=False, help="Logs de eventos da rede")
+    args = parser.parse_args()
     load_dotenv()
+
+    debug = getattr(args, 'debug', False)
 
     days = int(os.getenv("DAYS"))
     offline_probability = float(os.getenv("OFFLINE_PROBABILITY"))
@@ -235,6 +257,10 @@ if __name__ == "__main__":
     standart_deviation = float(os.getenv("STANDART_DEVIATION"))  # em horas
     meeting_probability = float(os.getenv("MEETING_PROBABILITY"))
     sim_range = int(os.getenv("RANGE"))
+
+
+
+
 
     resultados = []
     for i in range(sim_range):
@@ -247,7 +273,8 @@ if __name__ == "__main__":
             request_timeout_base=request_timeout,
             mean=mean,
             desvio_padrao=standart_deviation,
-            meeting_probability=meeting_probability
+            meeting_probability=meeting_probability,
+            debug=debug,
         )
         resultados.append((sim_time, blocos, eventos))
 
@@ -258,5 +285,5 @@ if __name__ == "__main__":
     media_blocos = sum(blocos_totais) / len(blocos_totais)
 
     print("\n========== Estatísticas das Iterações ==========")
-    print(f"Média de tempo de produção de blocos: {media_tempo/media_blocos} segundos")
+    print(f"Média de tempo de produção de blocos: {media_tempo / media_blocos} segundos")
     print(f"Média de blocos produzidos: {media_blocos:.2f}")
