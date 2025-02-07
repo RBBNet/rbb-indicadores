@@ -65,7 +65,7 @@ async function listIssues() {
             }  
         }
 
-        const resultsFolder = path.join('.', 'Issues', 'result');
+        const resultsFolder = path.join('.', 'result');
         if (!fs.existsSync(resultsFolder)) {
             fs.mkdirSync(resultsFolder, { recursive: true });
         }
