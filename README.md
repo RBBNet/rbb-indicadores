@@ -2,7 +2,7 @@
 
 As ferramentas presentes nesse repositório servem de apoio à equipe da Rede Blockchain Brasil (RBB) para acompanhamento da operação e níveis de serviço da rede e evolução de atividades dos projetos do ecossistema.
 
-As ferramentas realizam consultas aos nós da RBB, para a coleta de índices de Produção de Blocos, e consultas à API do GitHub para acompanhamento do progresso de atividades (issues) nos projetos da rede.
+As ferramentas realizam consultas aos nós da RBB, para a coleta de índices de Produção de Blocos, e consultas à API do GitHub para acompanhamento de incidentes e progresso de atividades de projetos.
 
 ## Requisitos
 
@@ -10,8 +10,8 @@ As ferramentas possuem os seguintes requisitos em comum:
 
 - **NodeJS** na versão **22.11**
 - **NPM** na versão **10.9.0**
-- Arquivo **config.json** criado na pasta raiz do repositório com os campos:
-  - Não havendo proxy, pode-se criar o arquivo sem o campo `PROXY_URL`
+- Arquivo **config.json**, que deve ser criado na pasta raiz deste projeto, com os seguintes parâmetros:
+  - Não havendo proxy, pode-se criar o arquivo sem o parâmetro `PROXY_URL`
 
 ```json
 {   
