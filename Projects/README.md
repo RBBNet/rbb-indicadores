@@ -28,9 +28,9 @@ node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativ
 Onde:
 
 - `<mes-referencia>` e `<ano-referencia>` determinam o período de tempo a ser analizado.
-  - `<mes-referencia>` deve ser posterior ou igual ao `<data final>`.
-  - `<data final>` deve ser anterior ou igual à data corrente.
-  - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
+  - `<mes-referencia>` deve ser anterior ou igual ao mês corrente.
+  - `<ano-referencia>` deve ser anterior ou igual ao ano corrente.
+  - Ambas as datas devem ser passadas obrigatoriamente no formato **MM/AAAA**.
 
 ## Funcionamento
 
@@ -51,6 +51,8 @@ Essa etapa consiste em iterar a coluna dos IDs das iniciativas cadastradas, a fi
 Quando a ferramenta encontra uma issue que referencia o ID em questão, acessa os comentários dessa issue, a fim de buscar algum com a tag `#andamento`, o marcador de progresso, e atribuir o valor **ANDAMENTO** a esse evento, conferindo progresso à issue.
 
 Caso haja alguma issue referenciando um ID, porém sem eventos, a ferramenta verifica se há algum registro anterior de progresso, o que, nesse caso, implica que a iniciativa receberá o valor **SEM_ANDAMENTO** para o mês em questão. Caso contrário, será atribuído o valor **NAO_INICIADO** à iniciativa.
+
+Se a iniciativa foi encerrada no período anterior, será atribuído o valor **Encerrado** para o mês em questão.
 
 ### 3. Busca por inconsistências
 
