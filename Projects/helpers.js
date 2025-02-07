@@ -42,13 +42,4 @@ function calculateDaysOpen(creationString, closedString){
     return ((dateAux - creationDate)/86400000).toFixed(0);
 }
 
-function findProgressTag(text){
-    let Tags = ['#andamento']
-    for(const tag of Tags){
-        if(text.includes(tag))
-        {return true}
-    }
-    return false
-}
-
 export default { cleanTimeLine, cleanIssue };
