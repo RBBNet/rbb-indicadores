@@ -28,48 +28,59 @@ main();
 async function main() {
 
     if(process.argv.length != 4){
-        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>\n');
+        console.error('ERRO: Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>\n');
         return;
     }
     const refPeriod = process.argv[2];
     const refPeriodParts = refPeriod.split('/');
     //Valida o formato do período de referência e verifica se é um arquivo .csv
     if (!PERIOD_MES_ANO.test(refPeriod)) {
-        console.error(`Erro: O período de referência ${refPeriod} não obedece o padrão MM/AAAA`);
+        console.error(`ERRO: O período de referência ${refPeriod} não obedece o padrão MM/AAAA\n`);
         process.exit(1);
     }
+
+    const refMonth = parseInt(refPeriodParts[0]);
+    const refYear = parseInt(refPeriodParts[1]);
+    
+    // Verifica se o período de referência é futuro
+    const today = new Date();
+    const currentMonth = today.getMonth() + 1;
+    const currentYear = today.getFullYear();
+    
+    if (refYear > currentYear || (refYear === currentYear && refMonth > currentMonth)) {
+        console.error(`ERRO: O período de referência ${refMonth}/${refYear} é uma data futura!\n`);
+        process.exit(1);
+    }
+    
     const initiativesFileName = process.argv[3];
     if (!fs.existsSync(initiativesFileName)) {
-        console.error(`Erro: O arquivo ${initiativesFileName} não foi encontrado\n`);
+        console.error(`ERRO: O arquivo ${initiativesFileName} não foi encontrado\n`);
         process.exit(1);
     }
     if(!initiativesFileName.endsWith('.csv')) {
-        console.error(`Erro: O arquivo ${initiativesFileName} não é um arquivo CSV\n`);
+        console.error(`ERRO: O arquivo ${initiativesFileName} não é um arquivo CSV\n`);
         process.exit(1);
     }
 
-    const refMonth = refPeriodParts[0];
-    const refYear = refPeriodParts[1];
-
-    console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
-    console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
+    console.log(`- Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
+    console.log(`- Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
 
     const initiatives = await loadInitiatives(initiativesFileName);
     // Descobre a coluna do CSV que corresponde ao período de referência
     const refColumn = getRefColumn(initiatives, refMonth, refYear);
     if(refColumn == FIRST_DATA_COLUMN) {
         // Ferramenta não sabe tratar o primeiro período, que deve ser inicializado manualmente
-        console.error('Primeiro período de acompanhamento deve ser inicializado manualmente');
+        console.error('ERRO: O primeiro período de acompanhamento deve ser inicializado manualmente\n');
         process.exit(1);
     }
     console.log();
 
-    console.log('Obtendo iniciativas de Maturação do Piloto...');
+    console.log('Obtendo iniciativas de Maturação do Piloto...\n');
     const activeIssues = await getActiveIssues(refMonth, refYear);
     if(activeIssues.length == 0) {
-        console.error('Nenhuma issue ativa encontrada.');
+        console.error('ERRO: Nenhuma issue ativa encontrada.\n');
     }
-    console.log('Gerando arquivos CSV para comentários e issues...');
+    console.log('Gerando arquivos CSV para comentários e issues...\n');
     await writeTimelineCSV(activeIssues);
     await writeIssueCSV(activeIssues);
     console.log();
@@ -82,13 +93,13 @@ async function main() {
             }
         }
     });
-    console.log('Econtrados andamentos para as seguintes issues:');
+    console.log(' - Econtrados andamentos para as seguintes issues:\n');
     for(let i = 0; i < inProgressIssues.length; ++i) {
         console.log(` - ${inProgressIssues[i].issue.issue_id} - ${inProgressIssues[i].issue.title}`);
     }
     console.log();
 
-    console.log(`Atualizando andamento das iniciativas...`);
+    console.log(` - Atualizando andamento das iniciativas...\n`);
     // Atualiza as iniciativas com andamento
     for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
         const initiativeId = initiatives[i][0];
@@ -141,13 +152,13 @@ function initiativeHasPreviousState(initiative, refColumn, state) {
 async function getActiveIssues(refMonth, refYear) {
     const projectKanbamCards = await functions.fetchProjectData();
     if (!Array.isArray(projectKanbamCards)) {
-        throw new Error('projectKanbamCards não é uma array');
+        throw new Error('ERRO: projectKanbamCards não é uma array');
     }
 
     let activeIssues = [];
     for(const card of projectKanbamCards){
         const issue = helpers.cleanIssue(card.content);
-        const timeline = await functions.fetchIssueTimelineData(card.content.repository.name, card.content.number);
+        const timeline = await functions.fetchIssueTimelineData(card.content.repository.name, card.content.number, refYear, refMonth);
         const timelineRefPeriod = timeline.filter(ev => 
             (ev.event_created_at.getMonth() + 1) == refMonth && ev.event_created_at.getFullYear() == refYear
         );
@@ -207,20 +218,20 @@ async function loadInitiatives(initiativesFileName) {
     const initiatives = await parsePromise;
     // Valida formato do arquivo
     if(initiatives[HEADER_ROW].length < 5) {
-        throw new Error(`Arquivo de iniciativas deve ter ao menos as colunas "${ID_HEADER}", "${INITIATIVE_HEADER}", "${RESPONSIBLES_HEADER}" e dois meses de acompanhamento`);
+        throw new Error(`ERRO: Arquivo de iniciativas deve ter ao menos as colunas "${ID_HEADER}", "${INITIATIVE_HEADER}", "${RESPONSIBLES_HEADER}" e dois meses de acompanhamento`);
     }
     if(initiatives[HEADER_ROW][ID_COLUMN] != ID_HEADER) {
-        throw new Error(`Coluna "${ID_HEADER}" não encontrada na posição ${ID_COLUMN}`);
+        throw new Error(`ERRO: Coluna "${ID_HEADER}" não encontrada na posição ${ID_COLUMN}`);
     }
     if(initiatives[HEADER_ROW][INITIATIVE_COLUMN] != INITIATIVE_HEADER) {
-        throw new Error(`Coluna "${INITIATIVE_HEADER}" não encontrada na posição ${INITIATIVE_COLUMN}`);
+        throw new Error(`ERRO: Coluna "${INITIATIVE_HEADER}" não encontrada na posição ${INITIATIVE_COLUMN}`);
     }
     if(initiatives[HEADER_ROW][RESPONSIBLES_COLUMN] != RESPONSIBLES_HEADER) {
-        throw new Error(`Coluna "${RESPONSIBLES_HEADER}" não encontrada na posição ${RESPONSIBLES_COLUMN}`);
+        throw new Error(`ERRO: Coluna "${RESPONSIBLES_HEADER}" não encontrada na posição ${RESPONSIBLES_COLUMN}`);
     }
     for(let i = FIRST_DATA_COLUMN; i < initiatives[HEADER_ROW].length; ++i) {
         if(!PERIOD_REGEX.test(initiatives[HEADER_ROW][i])) {
-            throw new Error(`Coluna ${i} - ${initiatives[HEADER_ROW][i]} não obedece o padrão ${PERIOD_REGEX}`);
+            throw new Error(`ERRO: Coluna ${i} - ${initiatives[HEADER_ROW][i]} não obedece o padrão ${PERIOD_REGEX}`);
         }
     }
     return initiatives;
@@ -238,7 +249,7 @@ function getRefColumn(initiatives, refMonth, refYear) {
         }
     }
     if(refColumn == 0) {
-        throw new Error(`Período de referência ${refMonth}/${refYear} não encontrado na planilha`);
+        throw new Error(`ERRO: Período de referência ${refMonth}/${refYear} não encontrado na planilha`);
     }
     return refColumn;
 }

@@ -37,24 +37,22 @@ if (proxyurl != null) {
  * 
  * @returns {[  timeline_events  ]}
  */
-async function fetchIssueTimelineData(repo, number) {
-    let timeline;
-
-    
+async function fetchIssueTimelineData(repo, number, refYear, refMonth) {
     const params = {
         owner: Config.ORG,
         repo: repo,
         issue_number: number,
         per_page: 100,
+        //Filtra a chamada à API usando o valor do Mês e Ano de Referência
+        since: `${refYear}-${refMonth.toString().padStart(2,'0')}-01T03:00:00Z`,
         headers: {
             'X-GitHub-Api-Version': '2022-11-28'
         }
     };
     
     try {
-        timeline = await octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/timeline', params);
+        const timeline = await octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/timeline', params);
         let cleanedTimeline = helpers.cleanTimeLine(timeline, {repo: repo, issue_number: number});
-        
         return cleanedTimeline
     } 
     catch (error) {
