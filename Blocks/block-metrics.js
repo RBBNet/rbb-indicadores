@@ -105,38 +105,38 @@ async function getMetrics(){
     }
 
     let responses = [];
-    let step_date = addDays(date_first, 7);
+    let interval_days = 7; // Padrão de intervalo de tempo
+    let step_date = addDays(date_first, interval_days - 1);
     let cont = 0;
 
-    while (step_date <= date_last) {
-        console.log(`PERÍODO ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth()+1}/${step_date.getFullYear()}`);
-
+    while (date_first <= date_last) {
+        // Calcula os dias restantes entre date_first e date_last
+        const remainingDays = Math.ceil((date_last - date_first) / (1000 * 60 * 60 * 24));
+        // Ajusta o intervalo se os dias restantes forem menores que o intervalo padrão
+        if (remainingDays < interval_days) {
+            step_date = new Date(date_last);
+        } else {
+            step_date = addDays(date_first, interval_days - 1);
+        }
+        console.log(`PERÍODO ${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth() + 1}/${step_date.getFullYear()}`);
+        
         let first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
-        //a linha acima está longe de ser o ideal, porque o script JÁ SABE o first block number,
-        //mas eu preciso declarar ele de novo para o loop funcionar. - Lionel
-
         let step_block = await helpers.gets_block_number_by_date(step_date, provider);
 
-        if (first_block_number >= step_block){
+        if (first_block_number >= step_block) {
             break;
-        } //isso deve garantir a parada do loop na iteração correta.
-
-        responses[cont] = await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap);
-
-        date_first = step_date;
-
-        // Se a diferença entre `date_last` e `date_first` for menor que 7 dias, ajusta o step_date para `date_last`
-        if (addDays(date_first, 7) > date_last) {
-            step_date = date_last;
-        } else {
-            step_date = addDays(step_date, 7);
         }
-
-        cont += 1;
+        responses[cont] = await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap);
+        
+        date_first = addDays(step_date, 1);
+        
+        if (date_first > date_last) {
+            break;
+        }
+        cont++;
     }
 
     responses = responses.flat();
-
     const result = Object.values(responses.reduce((acc, curr) => {
         if (!acc[curr.organization]) {
             acc[curr.organization] = {
@@ -149,19 +149,17 @@ async function getMetrics(){
         acc[curr.organization].lastProposedBlockNumber = Math.max(acc[curr.organization].lastProposedBlockNumber, curr.lastProposedBlockNumber);
         return acc;
     }, {}));
-
+    
     result.sort((a, b) => a.organization.localeCompare(b.organization));
-
+    
     console.log(`Blocos produzidos: ${blocksProducedREAL}`);
     console.log(`Qtd máx ideal:     ${blocksProducedIDEAL}`);
     console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)*100}%`);
-
+    
     let filteredResults = result.map(node => ({
         'Organização': node.organization,
         'Blocos produzidos': node.proposedBlockCount
     }));
-
-    console.table(filteredResults);
 
     let file_header =
         `Data inicial;${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()}
@@ -171,9 +169,10 @@ async function getMetrics(){
         Blocos produzidos;${blocksProducedREAL}
         Qtd max ideal;${blocksProducedIDEAL}
         Rendimento;${(blocksProductionRate.toFixed(2)).replace('.', ',')}
-    
-        Organizacao;Blocos Produzidos\n`;
-
+        
+        Organizacao; Blocos Produzidos\n`;
+        console.table(filteredResults);
+        
     helpers.write_csv(file_header,filteredResults);
 }
 
