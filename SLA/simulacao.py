@@ -283,7 +283,7 @@ if __name__ == "__main__":
     eventos = [res[2] for res in resultados]
     media_tempo = sum(tempos) / len(tempos)
     media_blocos = sum(blocos_totais) / len(blocos_totais)
-
+    blocos_esperados = (days * 24 * 86400) / 4
     print("\n========== Estatísticas das Iterações ==========")
     print(f"Média de tempo de produção de blocos: {media_tempo / media_blocos} segundos")
     print(f"Média de blocos produzidos: {media_blocos:.2f}")
