@@ -74,18 +74,20 @@ async function getMetrics(){
         return;
     }
 
-    date_last = helpers.update_date_last(date_last);
-    
     console.log(`Data inicial:      ${date_first.getDate()}/${date_first.getMonth()+1}/${date_first.getFullYear()}`);
     console.log(`Data final:        ${date_last.getDate()}/${date_last.getMonth()+1}/${date_last.getFullYear()} `);
-    
+
+    // Adiciona 1 dia à data final, para equivaler a <data_final> 24:00:00 -> Intervalo aberto no final do período
+    const date_last_ref = addDays(date_last, 1);
+
     first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
-    last_block_number = await helpers.gets_block_number_by_date(date_last, provider);
+    // Diminui 1 bloco, pois utilizando date_last_ref obtem-se o primeiro bloco do dia seguinte à data final
+    last_block_number = await helpers.gets_block_number_by_date(date_last_ref, provider) - 1;
 
     let blocksProducedREAL = last_block_number-first_block_number+1;
     let date_first_seconds = date_first.valueOf()/1000;
-    let date_last_seconds = date_last.valueOf()/1000;
-    let blocksProducedIDEAL = parseInt((date_last_seconds - date_first_seconds + 1)/4)
+    let date_last_ref_seconds = date_last_ref.valueOf()/1000;
+    let blocksProducedIDEAL = parseInt((date_last_ref_seconds - date_first_seconds)/4)
     let blocksProductionRate = blocksProducedREAL/blocksProducedIDEAL;
 
     console.log(`Bloco inicial:     ${first_block_number}`);
@@ -106,25 +108,25 @@ async function getMetrics(){
 
     let responses = [];
     const INTERVAL_DAYS = 7; // Padrão de intervalo de tempo
-    let step_date = addDays(date_first, INTERVAL_DAYS - 1);
 
-    while (date_first <= date_last) {
-        // Calcula os dias restantes entre date_first e date_last
-        const remainingDays = Math.ceil((date_last - date_first) / (1000 * 60 * 60 * 24));
+    while (date_first < date_last_ref) {
+        let step_date_ref = addDays(date_first, INTERVAL_DAYS);
         // Ajusta o intervalo se os dias restantes forem menores que o intervalo padrão
-        if (remainingDays < INTERVAL_DAYS) {
-            step_date = new Date(date_last);
-        } else {
-            step_date = addDays(date_first, INTERVAL_DAYS - 1);
+        if (step_date_ref > date_last_ref) {
+            step_date_ref = date_last_ref;
         }
+
+        // Data apenas para exibição na console
+        const step_date = addDays(step_date_ref, -1);
         console.log(`PERÍODO ${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth() + 1}/${step_date.getFullYear()}`);
         
-        let first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
-        let step_block = await helpers.gets_block_number_by_date(step_date, provider);
+        // Não diminui um bloco (como feito acima para last_block_number), pois a API do Besu espera intervalo aberto no parâmetro de bloco final
+        const step_block = await helpers.gets_block_number_by_date(step_date_ref, provider);
 
         responses.push(await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap));
         
-        date_first = addDays(step_date, 1);
+        date_first = step_date_ref;
+        first_block_number = step_block;
     }
 
     responses = responses.flat();
