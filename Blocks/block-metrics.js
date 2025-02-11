@@ -105,35 +105,26 @@ async function getMetrics(){
     }
 
     let responses = [];
-    let interval_days = 7; // Padrão de intervalo de tempo
-    let step_date = addDays(date_first, interval_days - 1);
-    let cont = 0;
+    const INTERVAL_DAYS = 7; // Padrão de intervalo de tempo
+    let step_date = addDays(date_first, INTERVAL_DAYS - 1);
 
     while (date_first <= date_last) {
         // Calcula os dias restantes entre date_first e date_last
         const remainingDays = Math.ceil((date_last - date_first) / (1000 * 60 * 60 * 24));
         // Ajusta o intervalo se os dias restantes forem menores que o intervalo padrão
-        if (remainingDays < interval_days) {
+        if (remainingDays < INTERVAL_DAYS) {
             step_date = new Date(date_last);
         } else {
-            step_date = addDays(date_first, interval_days - 1);
+            step_date = addDays(date_first, INTERVAL_DAYS - 1);
         }
         console.log(`PERÍODO ${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth() + 1}/${step_date.getFullYear()}`);
         
         let first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
         let step_block = await helpers.gets_block_number_by_date(step_date, provider);
 
-        if (first_block_number >= step_block) {
-            break;
-        }
-        responses[cont] = await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap);
+        responses.push(await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap));
         
         date_first = addDays(step_date, 1);
-        
-        if (date_first > date_last) {
-            break;
-        }
-        cont++;
     }
 
     responses = responses.flat();
