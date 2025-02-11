@@ -12,9 +12,9 @@ if debug:
 # Load configuration
 # ============================
 config = {}
-# Try loading from config.json
-if os.path.exists("config.json"):
-    with open("config.json") as f:
+# Try loading from simulation_config.json
+if os.path.exists("simulation_config.json"):
+    with open("simulation_config.json") as f:
         config = json.load(f)
 else:
     # Fallback: try loading from a .env file using python-dotenv
