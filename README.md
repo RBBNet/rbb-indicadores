@@ -1,4 +1,4 @@
-# RBB indicadores
+# RBB Indicadores
 
 As ferramentas presentes nesse repositório servem de apoio à equipe da Rede Blockchain Brasil (RBB) para acompanhamento da operação e níveis de serviço da rede e evolução de atividades dos projetos do ecossistema.
 
@@ -28,7 +28,7 @@ As ferramentas possuem os seguintes requisitos em comum:
 - [Issues](Issues/README.md) - Coleta dados sobre o tratamento de incidentes.
 - [Projects](Projects/README.md) - Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
 
-## Preparação do ambiente
+## Preparação do Ambiente
 
 Para instalar as dependências desse projeto basta utilizar o seguinte comando na pasta raiz:
 
@@ -38,14 +38,14 @@ npm install
 
 ## Execução das Ferramentas
 
-Para facilitar a execução das ferramentas, você pode utilizar o script `run-etl.bat` no Windows ou `run-etl.sh` no Linux. Esses scripts fornecem um menu interativo para escolher e executar as diferentes ferramentas disponíveis.
+Para facilitar a execução das ferramentas, você pode utilizar o script `run.bat` no Windows ou `run.sh` no Linux. Esses scripts fornecem um menu interativo para escolher e executar as diferentes ferramentas disponíveis.
 
 ### Windows
 
 Para executar o script no Windows, utilize o seguinte comando na pasta raiz do projeto:
 
 ```sh
-run-etl.bat
+run.bat
 ```
 
 ### Linux
@@ -53,7 +53,7 @@ run-etl.bat
 Para executar o script no Linux, utilize o seguinte comando na pasta raiz do projeto:
 
 ```sh
-./run-etl.sh
+./run.sh
 ```
 
 ### Menu de Ferramentas

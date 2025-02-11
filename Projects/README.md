@@ -22,46 +22,46 @@ Para utilizar essa ferramenta é necessário:
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 
 ```bash
-node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>
+node Project\project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>
 ```
 
 Onde:
-
 - `<mes-referencia>` e `<ano-referencia>` determinam o período de tempo a ser analizado.
   - `<mes-referencia>` deve ser anterior ou igual ao mês corrente.
   - `<ano-referencia>` deve ser anterior ou igual ao ano corrente.
   - Ambas as datas devem ser passadas obrigatoriamente no formato **MM/AAAA**.
+- `<caminho-csv-iniciativas>` indica o caminho para o arquivo CSV de entrada com os dados das iniciativas da Maturação do Piloto a serem acompanhadas.
 
-## Funcionamento
+O CSV de iniciativas deve serguir o seguinte formato:
 
-### 1. Carga de dados
+| ID                                       | Iniciativa                   | Responsáveis | `<01/MM/AAAA>` | `<01/MM/AAAA>` | `<01/MM/AAAA>` | ... |
+| ---------------------------------------- | ---------------------------- | ------------ | -------------- | -------------- | -------------- | --- |
+| \[Revisão do Permissionamento\]\[BNDES\] | Ajustes Permissionamento     | BNDES        | Andamento      | ...            | ...            | ... |
+| \[Rotação de Validadores\]\[BNDES\]      | Rotação de Validadores       |              | Sem_andamento  | ...            | ...            | ... |
+| \[Ferramentas\]\[Indicadores\]           | Ferramentas para Indicadores |              | Andamento      | ...            | ...            | ... |
+| \[observer-boot\]\[BNDES\]               | Observer boot                | BNDES        | Encerrado      | ...            | ...            | ... |
+| \[`<ID>`\]\[`<ID>`\]                     | ...                          | ...          | `<situacao>`   | `<situacao>`   | `<situacao>`   | ... |
+| ...                                      | ...                          | ...          | ...            | ...            | ...            | ... |
 
-A primeira etapa consiste em duas consultas à API do Github, uma de acesso ao Kanbam, a fim de obter as issues associadas aos Cards, e outra para obter os eventos de timeline dessas issues. Durante a execução serão gerados dois arquivos no diretório `Projects/tmp`, uma para as issues associadas aos cards e outro para os eventos dessas issues.
+Onde:
+- \[`<ID>`\]: São os identificadores com os quais são marcadas as *issues* do projeto, em seu título, para que se possa vinculá-las ao acompanhamento.
+  - Os indentificadores têm que estar entre colchetes.
+  - Espera-se a marcação de dois identificadores nas *issues*, onde o segundo geralmente indica a organização responsável.
+- `<01/MM/AAA>`: Indica o mês de referência para acompanhamento.
+  - A data deve ser sempre no dia 1º do mês indicado.
+- `<situacao>`: Indica a situação da iniciativa naquele mês:
+  - `Andamento`: Houve progresso para a iniciativa no mês
+  - `Sem_andamento`: A iniciativa já foi iniciada em algum momento passado, mas não houve progresso no mês
+  - `Nao_iniciado`: A iniciativa ainda não foi iniciada.
+  - `Encerrado`: A iniciativa já foi encerrada.
 
-### 2. Processamento das informações
+Ao ser executada, a ferramenta:
+- Consultará o projeto informado (`PROJECT_NUMBER`) no GitHub, para que sejam buscados os *cards* das colunas `In Progress` e `Done`.
+  - Somente serão considerados *cards* que correspondam a *issues* cadastradas em algum repositório.
+  - Somente serão consideradas as issues que tenham em seu título identificadores registrados no CSV de entrada.
+- Para cada *issue* obtida serão buscados comentários que contenham em seu corpo a *tag* `#andamento` e tenham sido registrados no período informado.
 
-Passada essa etapa, os arquivos serão processados a fim de registrar o status das iniciativas. Para isso, são utilizados quatro códigos, cada um representando uma situação:
-
-- **Andamento**, se houve progresso no mês de registro
-- **Sem_andamento**, se houve progresso no mês anterior, mas não no mês de registro
-- **Nao_iniciado**, se nunca houve progresso algum
-- **Encerrado**, se a iniciativa for encerrada
-
-Essa etapa consiste em iterar a coluna dos IDs das iniciativas cadastradas, a fim de encontrar issues com esses IDs em seus títulos, já que a relação entre **Iniciativa X Issue** é da ordem de **1:N**.
-Quando a ferramenta encontra uma issue que referencia o ID em questão, acessa os comentários dessa issue, a fim de buscar algum com a tag `#andamento`, o marcador de progresso, e atribuir o valor **ANDAMENTO** a esse evento, conferindo progresso à issue.
-
-Caso haja alguma issue referenciando um ID, porém sem eventos, a ferramenta verifica se há algum registro anterior de progresso, o que, nesse caso, implica que a iniciativa receberá o valor **SEM_ANDAMENTO** para o mês em questão. Caso contrário, será atribuído o valor **NAO_INICIADO** à iniciativa.
-
-Se a iniciativa foi encerrada no período anterior, será atribuído o valor **Encerrado** para o mês em questão.
-
-### 3. Busca por inconsistências
-
-Em seguida, os resultados serão processados para eliminar valores conflitantes em um mesmo período de tempo.
-
-Essa etapa consiste em ordenar os eventos por issue, mês e valor de progresso atribuído de forma ascendente, exceto pelo progresso, para que, por fim, cada subconjunto de eventos com os mesmos identificador de issue e mês seja filtrado mantendo apenas o primeiro valor, o qual será o maior.
-
-Por exemplo, se houver duas issues referenciando um mesmo ID, porém uma registra progresso em um mês e a outra não, permanecerá aquela no registro, e essa será eliminada.
-
-### 4. Registro dos resultados
-
-Por fim, os valores são atualizados na estrutura de dados que espelha a base de dados das iniciativas, a qual, em seguida, é salva em arquivo `.csv`, que pode ser acessado pelo caminho: `Projects/result/iniciativas_updated.csv`.
+Ao final da execução, a ferramenta gerará os seguintes arquivos, em formato CSV, na pasta `result`:
+- `Issues.csv`: Contendo as *issues* identificadas para o projeto.
+- `Comentarios.csv`: Contendo todos os comentários encontrados para as *issues* no período informado.
+- `Iniciativas_updated.csv`: Contendo as iniciativas, conforme reportadas no arquivo de entrada, porém com a atualização da situação na coluna correspondente ao período informado.
