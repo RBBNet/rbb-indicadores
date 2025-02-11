@@ -1,0 +1,9 @@
+{
+    "block_time": 4,
+    "request_timeout": 8,
+    "p_operator_absence": 0.1,
+    "T_fail": 21600,
+    "mean_offline_time": 36000,
+    "simulation_duration": 172800,
+    "num_validators": 10
+}
