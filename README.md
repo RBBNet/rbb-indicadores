@@ -35,3 +35,34 @@ Para instalar as dependências desse projeto basta utilizar o seguinte comando n
 ```javascript
 npm install
 ```
+
+## Execução das Ferramentas
+
+Para facilitar a execução das ferramentas, você pode utilizar o script `run-etl.bat` no Windows ou `run-etl.sh` no Linux. Esses scripts fornecem um menu interativo para escolher e executar as diferentes ferramentas disponíveis.
+
+### Windows
+
+Para executar o script no Windows, utilize o seguinte comando na pasta raiz do projeto:
+
+```sh
+run-etl.bat
+```
+
+### Linux
+
+Para executar o script no Linux, utilize o seguinte comando na pasta raiz do projeto:
+
+```sh
+./run-etl.sh
+```
+
+### Menu de Ferramentas
+
+O menu interativo permite escolher entre as seguintes opções:
+
+1. **Métricas de Produção de Blocos**: Gera indicadores sobre a produção de blocos.
+2. **Acompanhamento das Iniciativas de Maturação do Piloto**: Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
+3. **Issues em Produção**: Coleta dados sobre o tratamento de incidentes.
+4. **Sair**: Encerra o script.
+
+**Siga as instruções no menu para fornecer os parâmetros necessários para cada ferramenta.**
