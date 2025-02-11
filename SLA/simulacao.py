@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 import os
 import argparse
 
+import pandas as pd
 
+data = []
 # ---------------------------------------------------------------------
 # 1. Validador (Online/Offline)
 # ---------------------------------------------------------------------
@@ -16,8 +18,9 @@ def validador_esta_online(prob_falha, media, desvio_padrao):
     """
     if random.random() < prob_falha:
         rng = np.random.default_rng()
-        # Gera tempo de falha em horas, converte para segundos
-        tempo_falha = abs(rng.normal(media, desvio_padrao))
+        # Gera tempo de falha com distribuição exponencial (média é o parâmetro scale pedido pelo numpy)
+        tempo_falha = abs(rng.exponential(scale=media))
+        data.append(tempo_falha)
         return False, int(tempo_falha * 3600)
     else:
         return True, 0
@@ -204,7 +207,7 @@ def main(days, offline_probability, total_validators, block_period, request_time
                 attempts = 0
                 request_timeout = request_timeout_base
                 if debug:
-                    print(f"Bloco {blocos_totais} produzido por validador {candidato['id']}")
+                    print(f"Bloco {blocos_totais} produzido pelo validador {candidato['id']}")
             else:
                 attempts += 1  # Útil para calcular o request_timeout. É um outro approach, mas funciona.
                 incremento = request_timeout * (2 ** (attempts - 1))
@@ -284,7 +287,12 @@ if __name__ == "__main__":
     media_tempo = sum(tempos) / len(tempos)
     media_blocos = sum(blocos_totais) / len(blocos_totais)
     blocos_esperados = (days * 24 * 86400) / 4
+
+    dataframe = pd.DataFrame(data)
+    dataframe.to_excel("distribuicao_exponencial.xlsx") # Bacana e talvez desejado. Útil para gerar gráficos.
+
     print("\n========== Estatísticas das Iterações ==========")
+    print(f"Quantidade esperada de blocos: {blocos_esperados}")
     print(f"Média de tempo de produção de blocos: {media_tempo / media_blocos} segundos")
     print(f"Média de blocos produzidos: {media_blocos:.2f}")
     print("Porcentagem de blocos válidos:")
