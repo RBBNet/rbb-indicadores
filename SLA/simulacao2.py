@@ -29,7 +29,8 @@ else:
             "T_fail": float(os.getenv("T_FAIL", 21600)),
             "simulation_duration": int(os.getenv("SIMULATION_DURATION", 3 * 86400)),
             "num_validators": int(os.getenv("NUM_VALIDATORS", 10)),
-            "mean_offline_time": float(os.getenv("MEAN_OFFLINE_TIME", 3600))
+            "mean_offline_time": float(os.getenv("MEAN_OFFLINE_TIME", 3600)),
+            "meeting_interval_in_hours": int(os.getenv("MEETING_INTERVAL_HOURS"), 5)
         }
     except ImportError:
         config = {}
@@ -41,7 +42,7 @@ dt = 1  # simulation time-step (seconds)
 simulation_duration = int(config.get("simulation_duration", 3 * 86400))
 simulation_duration = simulation_duration * 86400 # isso vai permitir colocar em dias ao invés de segundos
 num_validators = int(config.get("num_validators", 10))
-
+meeting_interval_in_hours = int(config.get("meeting_interval_in_hours", 5))
 # --- QBFT Block production parameters ---
 block_time = float(config.get("block_time", 5))  # base time interval between blocks (seconds)
 request_timeout = float(
@@ -92,6 +93,19 @@ next_block_time = 0
 proposer_index = 0
 consecutive_failure_count = 0
 
+meeting_interval_in_seconds = meeting_interval_in_hours * 3600
+
+def format_time(t):
+    days = t // 86400
+    t %= 86400
+
+    hours = t // 3600
+    t %= 3600
+
+    minutes = t // 60
+    seconds = t % 60
+    return f"{days:02d} - {(hours + 1):02d}:{minutes:02d}:{seconds:02d}"
+
 # ============================
 # Main simulation loop (dt = 1 second)
 # ============================
@@ -104,49 +118,39 @@ for t in range(simulation_duration):
                 validator.offline_timer = random.expovariate(1 / mean_offline_time)
                 if debug:
                     print(
-                        f"[DEBUG] t={t}: Validator {validator.id} transitioning to failing (offline_timer={validator.offline_timer:.2f})")
+                        f"[DEBUG] t={format_time(t)}: Validator {validator.id} transitioning to failing (offline_timer={validator.offline_timer:.2f})")
         elif validator.state == "failing":
             validator.offline_timer -= dt
             if validator.offline_timer <= 0:
                 validator.state = "online"
                 if debug:
-                    print(f"[DEBUG] t={t}: Validator {validator.id} recovered and is now online")
+                    print(f"[DEBUG] t={format_time(t)}: Validator {validator.id} recovered and is now online")
 
-    # --- Daily meeting at 11:00 am.
-    if t % 86400 == meeting_time_offset:
+
+    if t % meeting_interval_in_seconds == 0:
         included_validators = [v for v in validators if v.included]
         if included_validators:
             count_attending = sum(1 for v in included_validators if random.random() < (1 - p_operator_absence))
             if debug:
-                print(f"[DEBUG] t={t}: Meeting attendance - {count_attending} out of {len(included_validators)}")
+                print(f"[DEBUG] t={format_time(t)}: Meeting attendance - {count_attending} out of {len(included_validators)}")
             meeting_quorum = (count_attending > len(included_validators) / 2)
         else:
             meeting_quorum = False
             if debug:
-                print(f"[DEBUG] t={t}: Meeting - no validators included")
+                print(f"[DEBUG] t={format_time(t)}: Meeting - no validators included")
 
         if meeting_quorum:
             if debug:
-                print(f"[DEBUG] t={t}: Meeting quorum met")
+                print(f"[DEBUG] t={format_time(t)}: Meeting quorum met")
             for validator in validators:
                 if validator.state == "failing" and validator.included:
                     validator.included = False
                     if debug:
-                        print(f"[DEBUG] t={t}: Validator {validator.id} excluded due to failure")
+                        print(f"[DEBUG] t={format_time(t)}: Validator {validator.id} excluded due to failure")
                 elif validator.state == "online" and not validator.included:
                     validator.included = True
                     if debug:
-                        print(f"[DEBUG] t={t}: Validator {validator.id} re-included as it recovered")
-            # operator_attends = (random.random() < (1 - p_operator_absence))
-            # if operator_attends:
-            #     if validator.state == "failing" and validator.included:
-            #         validator.included = False
-            #         if debug:
-            #             print(f"[DEBUG] t={t}: Validator {validator.id} excluded due to failure")
-            #     elif validator.state == "online" and not validator.included:
-            #         validator.included = True
-            #         if debug:
-            #             print(f"[DEBUG] t={t}: Validator {validator.id} re-included as it recovered")
+                        print(f"[DEBUG] t={format_time(t)}: Validator {validator.id} re-included as it recovered")
 
             committee = [v for v in validators if v.included]
             active = sum(1 for v in committee if v.state == "online")
@@ -158,7 +162,7 @@ for t in range(simulation_duration):
                 consecutive_failure_count = 0
                 if debug:
                     print(
-                        f"[DEBUG] t={t}: Committee met quorum (active: {active}/{len(committee)}). Restarting block production.")
+                        f"[DEBUG] t={format_time(t)}: Committee met quorum (active: {active}/{len(committee)}). Restarting block production.")
     # --- Determine network quorum based on the current consensus committee.
     committee = [v for v in validators if v.included]
     total_included = len(committee)
@@ -178,7 +182,7 @@ for t in range(simulation_duration):
                 uptime_intervals.append((current_uptime_start, t))
                 if debug:
                     print(
-                        f"[DEBUG] t={t}: Network went down; recorded uptime interval from {current_uptime_start} to {t}")
+                        f"[DEBUG] t={format_time(t)}: Network went down; recorded uptime interval from {current_uptime_start} to {t}")
                 current_uptime_start = None
         last_network_status = network_currently_up
 
