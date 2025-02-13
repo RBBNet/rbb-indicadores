@@ -4,12 +4,12 @@ cls
 echo ==========================================
 echo          Menu de Ferramentas RBB
 echo ==========================================
-echo 1. Métricas de Produção de Blocos
-echo 2. Acompanhamento das Iniciativas de Maturação do Piloto
-echo 3. Issues em Produção
+echo 1. Metricas de Producao de Blocos
+echo 2. Acompanhamento das Iniciativas de Maturacao do Piloto
+echo 3. Issues em Producao
 echo 4. Sair
 echo ==========================================
-set /p choice=Escolha uma opção (1-4): 
+set /p choice=Escolha uma opcao (1-4): 
 
 if %choice%==1 goto blockMetrics
 if %choice%==2 goto projectMetrics
@@ -26,7 +26,7 @@ pause
 goto menu
 
 :projectMetrics
-set /p refPeriod=Digite o período de referência (MM/AAAA): 
+set /p refPeriod=Digite o periodo de referencia (MM/AAAA): 
 set /p initiativesPath=Digite o caminho para o arquivo CSV de iniciativas (Ex: Projects/tmp/arquivo.csv): 
 node Projects\project-metrics.js %refPeriod% %initiativesPath%
 pause
