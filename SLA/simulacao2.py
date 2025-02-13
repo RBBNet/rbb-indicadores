@@ -130,9 +130,9 @@ for t in range(simulation_duration):
     if t % meeting_interval_in_seconds == 0:
         included_validators = [v for v in validators if v.included]
         if included_validators:
-            count_attending = sum(1 for v in included_validators if random.random() < (1 - p_operator_absence))
+            count_attending = sum(1 for v in validators if random.random() < (1 - p_operator_absence))
             if debug:
-                print(f"[DEBUG] t={format_time(t)}: Meeting attendance - {count_attending} out of {len(included_validators)}")
+                print(f"[DEBUG] t={format_time(t)}: Meeting attendance - {count_attending} out of {num_validators}")
             meeting_quorum = (count_attending > len(included_validators) / 2)
         else:
             meeting_quorum = False
