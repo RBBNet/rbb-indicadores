@@ -66,7 +66,7 @@ mean_offline_time = float(config.get("mean_offline_time", 3600))  # mean offline
 # Define a simple Validator class.
 # ============================
 class Validator:
-    def __init__(self, vid,operator_reliability = 1-p_operator_absence):
+    def __init__(self, vid,operator_reliability = 1 - p_operator_absence):
         self.id = vid
         self.state = "online"  # "online" means working; "failing" means it has failed.
         self.included = True  # Whether the validator is currently in the network’s validator list.
@@ -94,7 +94,7 @@ uptime_intervals = []  # tuples (start_time, end_time) for continuous uptime per
 last_network_status = None
 current_uptime_start = None
 
-# --- Variables for QBFT round robin block production --- 
+# --- Variables for QBFT round robin block production ---
 next_block_time = 0
 proposer_index = 0
 consecutive_failure_count = 0
@@ -112,7 +112,7 @@ def format_time(t):
 
     minutes = t // 60
     seconds = t % 60
-    return f"day {days:02d} | {(hours + 1):02d}:{minutes:02d}:{seconds:02d}"
+    return f"day {days:02d} | {hours :02d}:{minutes:02d}:{seconds:02d}"
 
 # ============================
 # Main simulation loop (dt = 1 second)
@@ -134,50 +134,59 @@ for t in range(simulation_duration):
                 if debug:
                     print(f"[DEBUG] t={t}, {format_time(t)}: Validator {validator.id} recovered and is now online")
 
-
     if t % meeting_interval_in_seconds == 0 and t != 0:
+        # Determine os validadores que estão incluídos.
         included_validators = [v for v in validators if v.included]
-        for validator in validators:
-            if validator.included and validator.state == "online":
-                update_operator_status(validator)
-        if included_validators:
-            count_attending = sum(1 for v in validators if v.operator_present)
+
+        # Determine se há algum validador para excluir (incluso e falhando) ou incluir (não incluso e online).
+        validators_to_exclude = [v for v in validators if v.included and v.state == "failing"]
+        validators_to_include = [v for v in validators if not v.included and v.state == "online"]
+
+        if not (validators_to_exclude or validators_to_include):
             if debug:
-                print(f"[DEBUG] t={t}, {format_time(t)}: Meeting attendance - {count_attending} out of {num_validators}")
-            meeting_quorum = (count_attending > len(included_validators) / 2)
+                print(f"[DEBUG] t={format_time(t)}: Meeting not needed (no validators to fix)")
         else:
-            meeting_quorum = False
-            if debug:
-                print(f"[DEBUG] t={t}, {format_time(t)}: Meeting - no validators included")
-
-        if meeting_quorum:
-            if debug:
-                print(f"[DEBUG] t={t}, {format_time(t)}: Meeting quorum met")
+            # Atualiza a presença do operador apenas para os validadores incluídos e online.
             for validator in validators:
-                if validator.state == "failing" and validator.included:
-                    validator.included = False
-                    if debug:
-                        print(f"[DEBUG] t={t}, {format_time(t)}: Validator {validator.id} excluded due to failure")
-                elif validator.state == "online" and not validator.included:
-                    validator.included = True
-                    if debug:
-                        print(f"[DEBUG] t={t}, {format_time(t)}: Validator {validator.id} re-included as it recovered")
+                if validator.included and validator.state == "online":
+                    update_operator_status(validator)
 
+            # Contabiliza apenas os validadores que estão incluídos, online e com o operador presente.
+            count_attending = sum(1 for v in validators if v.included and v.state == "online" and v.operator_present)
+            if debug:
+                print(
+                    f"[DEBUG] t={format_time(t)}: Meeting attendance - {count_attending} out of {len(included_validators)}")
 
-            # TODO: reinício só acontece se 2/3 dos validadores onlines e incluídos estiver com os operadores presentes.
-            committee = [v for v in validators if v.included]
-            active = sum(1 for v in committee if v.state == "online")
-            operator_online = [v for v in validators if v.operator_present and v.included and v.state == "online"]
-            # In the meeting quorum branch, initialize last_block_time:
-            if committee and (len(operator_online) >= quorum_fraction) and network_down:
-                last_block_time = t  # record the time when block production restarts
-                next_block_time = last_block_time + block_time
-                proposer_index = 0
-                consecutive_failure_count = 0
-                network_down = False
+            # O quorum para a reunião é atingido se mais da metade dos validadores incluídos (e online) estiverem presentes.
+            meeting_quorum = (count_attending > len(included_validators) / 2)
+
+            if meeting_quorum:
                 if debug:
-                    print(
-                        f"[DEBUG] t={t}, {format_time(t)}: Committee met quorum (attendance: {len(operator_online)}/{len(committee)}). Restarting block production.")
+                    print(f"[DEBUG] t={format_time(t)}: Meeting quorum met")
+                # Exclui os validadores que estão falhando e re-inclui aqueles que se recuperaram.
+                for validator in validators:
+                    if validator.state == "failing" and validator.included:
+                        validator.included = False
+                        if debug:
+                            print(f"[DEBUG] t={format_time(t)}: Validator {validator.id} excluded due to failure")
+                    elif validator.state == "online" and not validator.included:
+                        validator.included = True
+                        if debug:
+                            print(f"[DEBUG] t={format_time(t)}: Validator {validator.id} re-included as it recovered")
+
+                # Reinício da rede: ocorre se 2/3 dos validadores incluídos, online e com operador presente estiverem presentes.
+                committee = [v for v in validators if v.included]
+                operator_online = [v for v in committee if v.state == "online" and v.operator_present]
+                if committee and (len(operator_online) > (2 / 3) * len(committee)) and network_down:
+                    last_block_time = t  # recorda o tempo em que a produção de blocos reinicia
+                    next_block_time = last_block_time + block_time
+                    proposer_index = 0
+                    consecutive_failure_count = 0
+                    network_down = False
+                    if debug:
+                        print(
+                            f"[DEBUG] t={format_time(t)}: Committee met operator quorum (attendance: {len(operator_online)}/{len(committee)}). Restarting block production.")
+
     # --- Determine network quorum based on the current consensus committee.
     committee = [v for v in validators if v.included]
     total_included = len(committee)
