@@ -214,36 +214,40 @@ for t in range(simulation_duration):
     if network_currently_up:
         network_up_time += dt
 
-    # --- Block production event.
-    if network_currently_up:
-        if next_block_time is None:
-            next_block_time = t + block_time
+    # --- Block production event (pre-meeting behavior, consensus fails if quorum not met).
+    if next_block_time is None:
+        next_block_time = t + block_time
 
-        if t >= next_block_time:
-            committee = [v for v in validators if v.included]
-            if committee:
-                committee.sort(key=lambda v: v.id)
-                designated_proposer = committee[proposer_index % len(committee)]
-                if designated_proposer.state == "online":
-                    block_timestamps.append(t)
-                    last_block_time = t  # update the reference time for the next block
-                    consecutive_failure_count = 0
-                    next_block_time = last_block_time + block_time
-                    if debug:
-                        print(f"[DEBUG] t={t}: Block produced by Validator {designated_proposer.id}")
-                    proposer_index = (proposer_index + 1) % len(committee)
-                else:
-                    consecutive_failure_count += 1
-                    penalty = (2 ** (consecutive_failure_count - 1)) * request_timeout
-                    next_block_time = last_block_time + block_time + penalty
-                    if debug:
-                        print(
-                            f"[DEBUG] t={t}: Validator {designated_proposer.id} failed to propose block, penalty = {penalty}")
-                    proposer_index = (proposer_index + 1) % len(committee)
+    if t >= next_block_time:
+        committee = [v for v in validators if v.included]
+        if committee:
+            committee.sort(key=lambda v: v.id)
+            designated_proposer = committee[proposer_index % len(committee)]
+            active_validators_count = sum(1 for v in committee if v.state == "online")
+            consensus_quorum = (active_validators_count / len(committee)) >= quorum_fraction
+            
+            if consensus_quorum and designated_proposer.state == "online":
+                # Block is produced successfully.
+                block_timestamps.append(t)
+                last_block_time = t  # update the reference time for the next block
+                consecutive_failure_count = 0
+                next_block_time = last_block_time + block_time
+                if debug:
+                    print(f"[DEBUG] t={t}: Block produced by Validator {designated_proposer.id}")
             else:
-                next_block_time = None
-    else:
-        next_block_time = None
+                # Block attempt fails (either not enough online validators overall or the proposer is failing)
+                consecutive_failure_count += 1
+                penalty = (2 ** (consecutive_failure_count - 1)) * request_timeout
+                next_block_time = last_block_time + block_time + penalty
+                if debug:
+                    print(
+                        f"[DEBUG] t={t}: Block attempt by Validator {designated_proposer.id} failed "
+                        f"(consensus_quorum: {consensus_quorum}, state: {designated_proposer.state}), "
+                        f"penalty = {penalty}"
+                    )
+            proposer_index = (proposer_index + 1) % len(committee)
+        else:
+            next_block_time = None
 
 # --- End-of-simulation:
 if last_network_status and current_uptime_start is not None:
