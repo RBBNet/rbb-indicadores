@@ -29,17 +29,14 @@ async function listIssues() {
         } 
         
         let fileData = 'number;title;labels;assignees;daysOpen;state';
-        let totalOpenIssues = 0;
         let allOpenIssues = [];
 
         for (const label of labels) {
-
             /*
             * API call parameters fetching for each label in labels and PRD issues
             * If needed, remove/add parameters in this map
             * except for 'owner', 'repo' and 'headers'  
             */
-           
             const params = {
                 owner: 'RBBNet',
                 repo: 'incidentes',
@@ -51,38 +48,40 @@ async function listIssues() {
                 }
             };
 
-            const { issues, openIssuesCount, openIssuesList } = await functions.fetchIssues(params, date_last);
-            totalOpenIssues += openIssuesCount;
-            allOpenIssues = allOpenIssues.concat(openIssuesList);
+            const allIssues = await functions.fetchIssues(params);
+            allOpenIssues = allOpenIssues.concat(allIssues.filter(issue => issue.state === 'open'));
+            const closedIssues = allIssues.filter(issue => {
+                const updateDate = new Date(issue.updated_at);
+                return (issue.state === 'closed' && updateDate.valueOf() <= date_last.valueOf());
+            });
         
             console.log('\n' + '-'.repeat(50));
             console.log(`ISSUES FOR ${label} + PRD`);
 
-            if (issues.length > 0) {
-                issues.forEach(issue => {
+            if (closedIssues.length > 0) {
+                closedIssues.forEach(issue => {
                     fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
                 });
-
-                console.table(issues);
+                console.table(closedIssues);
             } else {
                 console.log(`NENHUMA ISSUE ENCONTRADA PARA O RÓTULO: ${label} + PRD`);
             }  
         }
         console.log('\n' + '-'.repeat(50));
-        console.log('\n=== Issues em Aberto ===');
-        allOpenIssues.forEach(issue => {
-            console.log(`Issue aberta: #${issue.number} - ${issue.title}`);
-        });
-        console.log(`\nTotal de issues em aberto: ${totalOpenIssues}`);
+        console.log('ISSUES EM ABERTO');
+        if (allOpenIssues.length > 0) {
+            console.table(allOpenIssues);
+        }
+        console.log(`Total de issues em aberto: ${allOpenIssues.length}`);
+
         console.log('\n' + '-'.repeat(50));
         const resultsFolder = path.join('.', 'result');
         if (!fs.existsSync(resultsFolder)) {
             fs.mkdirSync(resultsFolder, { recursive: true });
         }
-        
         const fileName = 'Incidentes.csv';
         const filePath = path.join(resultsFolder, fileName);
-        console.log(`\nGerando Arquivo ${fileName}...`);
+        console.log(`Gerando Arquivo ${fileName}...`);
 
         fs.writeFile(filePath, fileData, { encoding: 'utf-8' }, (err) => {
             if (err) {

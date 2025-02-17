@@ -26,46 +26,23 @@ if(proxyurl != null){
     });
 }
 
-
-
-async function fetchIssues(params,date_last) {
+async function fetchIssues(params) {
     try {
         let response = await octokit.request('GET /repos/{owner}/{repo}/issues', params);
-        let { issues, openIssuesCount, openIssuesList } = cleanIssues(response, date_last);
-        return { issues, openIssuesCount, openIssuesList };
-    } catch (error) {
-        console.error(`Error ${error.status} while fetching issues:`, error);
-    }
-}
-
-function cleanIssues(response, date_last){
-    let openIssuesCount = 0;
-    let openIssuesList = [];
-    
-    const issues = response.data.map(issue => {
-        const updateDate = new Date(issue.updated_at);
-        if(updateDate.valueOf() <= date_last.valueOf()){
-            if (issue.state === 'open') {
-                openIssuesCount++;
-                openIssuesList.push({
-                    number: issue.number,
-                    title: issue.title
-                });
-                return null; 
-            }
+        return response.data.map(issue => {
             return {
                 'number': issue.number,
                 'title': issue.title,
                 'labels': issue.labels.map(label => label.name),
                 'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
                 'daysOpen': calculateDaysOpen(issue.created_at, issue.closed_at),
+                'updated_at': issue.updated_at,
                 'state': issue.state
-            }
-        }
-        return null;
-    }) 
-    .filter(item => item !== null);
-    return { issues, openIssuesCount, openIssuesList };
+            };
+        });
+    } catch (error) {
+        console.error(`Error ${error.status} while fetching issues:`, error);
+    }
 }
 
 function calculateDaysOpen(creationString, closedString){
