@@ -232,6 +232,7 @@ for t in range(simulation_duration):
                 last_block_time = t  # update the reference time for the next block
                 consecutive_failure_count = 0
                 next_block_time = last_block_time + block_time
+                network_down = False
                 if debug:
                     print(f"[DEBUG] t={t}: Block produced by Validator {designated_proposer.id}")
             else:
