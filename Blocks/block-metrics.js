@@ -90,9 +90,23 @@ async function getMetrics(){
     let blocksProducedIDEAL = parseInt((date_last_ref_seconds - date_first_seconds)/4)
     let blocksProductionRate = blocksProducedREAL/blocksProducedIDEAL;
 
-    console.log(`Bloco inicial:     ${first_block_number}`);
-    console.log(`Bloco final:       ${last_block_number}`);
-    
+    // Calcula o tempo total em segundos entre o primeiro e o último bloco
+    let productionTimeInSeconds = date_last_ref_seconds - date_first_seconds;
+    // Divide o tempo pelo número total de blocos produzidos realmete
+    let averageBlockProductionTime = productionTimeInSeconds / blocksProducedREAL;
+    console.log("Calculando tempos máximo e mínimo de produção...");
+
+    // Calcula o tempo máximo e mínimo entre Blocos (ajuste à amostragem (blockNumber) para 500 ou mais blocos para melhor performance)
+    let blockProductionTimes = [];
+    for (let blockNumber = first_block_number; blockNumber < last_block_number; blockNumber += 500) {
+        const block1 = await provider.getBlock(blockNumber);
+        const block2 = await provider.getBlock(blockNumber + 1);
+        if (block1 && block2) {
+            blockProductionTimes.push(block2.timestamp - block1.timestamp);
+        }
+    }
+    let maxProductionTime = Math.max(...blockProductionTimes);
+    let minProductionTime = Math.min(...blockProductionTimes);
     const nodesByIdMap = new Map();
 
     console.log("Carregando arquivos node.json:");
@@ -144,15 +158,19 @@ async function getMetrics(){
     }, {}));
     
     result.sort((a, b) => a.organization.localeCompare(b.organization));
-    
+    console.log(`Bloco inicial:     ${first_block_number}`);
+    console.log(`Bloco final:       ${last_block_number}`);
     console.log(`Blocos produzidos: ${blocksProducedREAL}`);
     console.log(`Qtd máx ideal:     ${blocksProducedIDEAL}`);
     console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)*100}%`);
+    console.log(`Tempo médio/bloco: ${averageBlockProductionTime.toFixed(2)} segundos`);
+    console.log(`Tempo máximo/bloco: ${maxProductionTime.toFixed(2)} segundos`);
+    console.log(`Tempo mínimo/bloco: ${minProductionTime.toFixed(2)} segundos`);
     
     let filteredResults = result.map(node => ({
         'Organização': node.organization,
-        'Blocos produzidos': node.proposedBlockCount
-    }));
+        'Blocos produzidos': node.proposedBlockCount,
+        }));
 
     let file_header =
         `Data inicial;${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()}
@@ -162,7 +180,9 @@ async function getMetrics(){
         Blocos produzidos;${blocksProducedREAL}
         Qtd max ideal;${blocksProducedIDEAL}
         Rendimento;${(blocksProductionRate.toFixed(2)).replace('.', ',')}
-        
+        Tempo medio/bloco (s);${(averageBlockProductionTime.toFixed(2)).replace('.', ',')}
+        Tempo maximo/bloco (s);${(maxProductionTime.toFixed(2)).replace('.', ',')}
+        Tempo minimo/bloco (s);${(minProductionTime.toFixed(2)).replace('.', ',')}\n
         Organizacao; Blocos Produzidos\n`;
         console.table(filteredResults);
         
