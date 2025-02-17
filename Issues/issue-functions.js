@@ -31,30 +31,41 @@ if(proxyurl != null){
 async function fetchIssues(params,date_last) {
     try {
         let response = await octokit.request('GET /repos/{owner}/{repo}/issues', params);
-        let filteredIssues = cleanIssues(response, date_last);
-        return filteredIssues;
+        let { issues, openIssuesCount, openIssuesList } = cleanIssues(response, date_last);
+        return { issues, openIssuesCount, openIssuesList };
     } catch (error) {
         console.error(`Error ${error.status} while fetching issues:`, error);
     }
 }
 
 function cleanIssues(response, date_last){
+    let openIssuesCount = 0;
+    let openIssuesList = [];
     
-    return response.data.map(issue => {
+    const issues = response.data.map(issue => {
         const updateDate = new Date(issue.updated_at);
         if(updateDate.valueOf() <= date_last.valueOf()){
+            if (issue.state === 'open') {
+                openIssuesCount++;
+                openIssuesList.push({
+                    number: issue.number,
+                    title: issue.title
+                });
+                return null; 
+            }
             return {
                 'number': issue.number,
                 'title': issue.title,
                 'labels': issue.labels.map(label => label.name),
                 'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
-                'daysOpen': issue.closed_at == null ? calculateDaysOpen(issue.created_at) : calculateDaysOpen(issue.created_at, issue.closed_at),
+                'daysOpen': calculateDaysOpen(issue.created_at, issue.closed_at),
                 'state': issue.state
             }
         }
         return null;
     }) 
-    .filter(item => item !== null);;
+    .filter(item => item !== null);
+    return { issues, openIssuesCount, openIssuesList };
 }
 
 function calculateDaysOpen(creationString, closedString){
@@ -78,10 +89,10 @@ async function getTokenOwner(){
         }
     }) 
     .then(response => {
-        console.log(`\nRETRIEVING ISSUES WITH TOKEN OWNED BY ${response.data.name} - @${response.data.login}`);
+        console.log(`\nRECUPERANDO ISSUES COM TOKEN DE PROPRIEDADE DE ${response.data.name} - @${response.data.login}`);
     })
     .catch(error => {
-        console.error('Error fetching user data:', error);
+        console.error('Error ao buscar dados do usuário:', error);
     }); 
 }
 

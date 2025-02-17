@@ -19,7 +19,7 @@ if %choice%==4 goto end
 :blockMetrics
 set /p startDate=Digite a data inicial (DD/MM/AAAA): 
 set /p endDate=Digite a data final (DD/MM/AAAA): 
-set /p provider=Digite o endereço do provider JSON-RPC (Ex: http://localhost:8545): 
+set /p provider=Digite o endereco do provider JSON-RPC (Ex: http://localhost:8545): 
 set /p nodesPath=Digite o caminho para os arquivos nodes.json (Ex: Blocks/node): 
 node Blocks\block-metrics.js %startDate% %endDate% %provider% %nodesPath%
 pause

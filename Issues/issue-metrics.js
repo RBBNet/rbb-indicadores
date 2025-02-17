@@ -29,6 +29,9 @@ async function listIssues() {
         } 
         
         let fileData = 'number;title;labels;assignees;daysOpen;state';
+        let totalOpenIssues = 0;
+        let allOpenIssues = [];
+
         for (const label of labels) {
 
             /*
@@ -40,7 +43,7 @@ async function listIssues() {
             const params = {
                 owner: 'RBBNet',
                 repo: 'incidentes',
-                state:'closed',
+                state: 'all',
                 labels: `${label},PRD`,
                 since: date_first.toISOString(),
                 headers: {
@@ -48,11 +51,12 @@ async function listIssues() {
                 }
             };
 
-            const issues = await functions.fetchIssues(params,date_last);
+            const { issues, openIssuesCount, openIssuesList } = await functions.fetchIssues(params, date_last);
+            totalOpenIssues += openIssuesCount;
+            allOpenIssues = allOpenIssues.concat(openIssuesList);
         
             console.log('\n' + '-'.repeat(50));
             console.log(`ISSUES FOR ${label} + PRD`);
-            console.log('-'.repeat(50));
 
             if (issues.length > 0) {
                 issues.forEach(issue => {
@@ -61,10 +65,16 @@ async function listIssues() {
 
                 console.table(issues);
             } else {
-                console.log(`No issues found for label: ${label} + PRD`);
+                console.log(`NENHUMA ISSUE ENCONTRADA PARA O RÓTULO: ${label} + PRD`);
             }  
         }
-
+        console.log('\n' + '-'.repeat(50));
+        console.log('\n=== Issues em Aberto ===');
+        allOpenIssues.forEach(issue => {
+            console.log(`Issue aberta: #${issue.number} - ${issue.title}`);
+        });
+        console.log(`\nTotal de issues em aberto: ${totalOpenIssues}`);
+        console.log('\n' + '-'.repeat(50));
         const resultsFolder = path.join('.', 'result');
         if (!fs.existsSync(resultsFolder)) {
             fs.mkdirSync(resultsFolder, { recursive: true });
@@ -72,7 +82,6 @@ async function listIssues() {
         
         const fileName = 'Incidentes.csv';
         const filePath = path.join(resultsFolder, fileName);
-
         console.log(`\nGerando Arquivo ${fileName}...`);
 
         fs.writeFile(filePath, fileData, { encoding: 'utf-8' }, (err) => {
@@ -89,7 +98,7 @@ async function listIssues() {
         });
 
     } catch (error) {
-        console.error(`Error ${error.status} while fetching issues:`, error);
+        console.error(`Error ${error.status} ao buscar as issues:`, error);
     }
 }
 
