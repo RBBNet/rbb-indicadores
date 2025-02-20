@@ -150,7 +150,7 @@ function initiativeHasPreviousState(initiative, refColumn, state) {
  * Function to retrieve issues associated to a Project Kanbam Card and their timelines.
  */
 async function getActiveIssues(refMonth, refYear) {
-    const projectKanbamCards = await functions.fetchProjectData();
+    const projectKanbamCards = await functions.fetchProjectData(refMonth,refYear);
     if (!Array.isArray(projectKanbamCards)) {
         throw new Error('ERRO: projectKanbamCards não é uma array');
     }
@@ -158,7 +158,7 @@ async function getActiveIssues(refMonth, refYear) {
     let activeIssues = [];
     for(const card of projectKanbamCards){
         const issue = helpers.cleanIssue(card.content);
-        const timeline = await functions.fetchIssueTimelineData(card.content.repository.name, card.content.number, refYear, refMonth);
+        const timeline = helpers.cleanTimeLine(card.content);
         const timelineRefPeriod = timeline.filter(ev => 
             (ev.event_created_at.getMonth() + 1) == refMonth && ev.event_created_at.getFullYear() == refYear
         );

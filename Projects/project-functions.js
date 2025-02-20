@@ -90,9 +90,10 @@ async function fetchIssueTimelineData(repo, number, refYear, refMonth) {
  *              fieldValueByName: { status: string }
  *          }]}
  */
-async function fetchProjectData() {
+async function fetchProjectData(refMonth, refYear) {
     try{
         const id = await getProjectID();
+        const date = new Date(`${refMonth}/1/${refYear}`).toISOString()
         const query = `
             query {
                 node(id: "${id}"){
@@ -119,6 +120,18 @@ async function fetchProjectData() {
                                         name
                                     }
                                     number
+                                    timelineItems(first: 100, since: "${date}" ){
+                                        nodes{
+                                            ... on IssueComment{
+                                                id
+                                                author{
+                                                    login
+                                                }
+                                                body
+                                                createdAt
+                                            }
+                                        }
+                                    }
                                 }              
                                 ... on PullRequest{
                                     id
@@ -157,6 +170,11 @@ async function fetchProjectData() {
 
         let filteredData =  data.filter(node => (Object.keys(node.content).length > 0) 
         && (node.fieldValueByName && (node.fieldValueByName.status == 'In Progress' || node.fieldValueByName.status == 'Done')));
+        
+        filteredData.forEach(issue => {
+            issue.content.timelineItems.nodes = issue.content.timelineItems.nodes.filter(item => Object.keys(item).length > 0);
+        });
+
         return filteredData;
     } 
     catch (error) {
