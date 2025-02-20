@@ -3,6 +3,7 @@ node
 result
 package-lock.json
 config.json
+debug.txt
 *.csv
 Projects/tmp/*
 .venv/*
