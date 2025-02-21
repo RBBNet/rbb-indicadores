@@ -3,7 +3,7 @@ import { fetch , ProxyAgent } from 'undici';
 import helpers from './helpers.js'
 
 import fs from 'fs';
-const Config = JSON.parse(fs.readFileSync('../config.json', 'utf8'));
+const Config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const proxyurl = Config.PROXY_URL;
 
 let octokit;
@@ -37,24 +37,22 @@ if (proxyurl != null) {
  * 
  * @returns {[  timeline_events  ]}
  */
-async function fetchIssueTimelineData(repo, number) {
-    let timeline;
-
-    
+async function fetchIssueTimelineData(repo, number, refYear, refMonth) {
     const params = {
         owner: Config.ORG,
         repo: repo,
         issue_number: number,
         per_page: 100,
+        //Filtra a chamada à API usando o valor do Mês e Ano de Referência
+        since: `${refYear}-${refMonth.toString().padStart(2,'0')}-01T03:00:00Z`,
         headers: {
             'X-GitHub-Api-Version': '2022-11-28'
         }
     };
     
     try {
-        timeline = await octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/timeline', params);
+        const timeline = await octokit.request('GET /repos/{owner}/{repo}/issues/{issue_number}/timeline', params);
         let cleanedTimeline = helpers.cleanTimeLine(timeline, {repo: repo, issue_number: number});
-        
         return cleanedTimeline
     } 
     catch (error) {
@@ -92,9 +90,10 @@ async function fetchIssueTimelineData(repo, number) {
  *              fieldValueByName: { status: string }
  *          }]}
  */
-async function fetchProjectData() {
+async function fetchProjectData(refMonth, refYear) {
     try{
         const id = await getProjectID();
+        const date = new Date(`${refMonth}/1/${refYear}`).toISOString()
         const query = `
             query {
                 node(id: "${id}"){
@@ -121,6 +120,18 @@ async function fetchProjectData() {
                                         name
                                     }
                                     number
+                                    timelineItems(first: 100, since: "${date}" ){
+                                        nodes{
+                                            ... on IssueComment{
+                                                id
+                                                author{
+                                                    login
+                                                }
+                                                body
+                                                createdAt
+                                            }
+                                        }
+                                    }
                                 }              
                                 ... on PullRequest{
                                     id
@@ -159,6 +170,11 @@ async function fetchProjectData() {
 
         let filteredData =  data.filter(node => (Object.keys(node.content).length > 0) 
         && (node.fieldValueByName && (node.fieldValueByName.status == 'In Progress' || node.fieldValueByName.status == 'Done')));
+        
+        filteredData.forEach(issue => {
+            issue.content.timelineItems.nodes = issue.content.timelineItems.nodes.filter(item => Object.keys(item).length > 0);
+        });
+
         return filteredData;
     } 
     catch (error) {

@@ -26,34 +26,23 @@ if(proxyurl != null){
     });
 }
 
-
-
-async function fetchIssues(params,date_last) {
+async function fetchIssues(params) {
     try {
         let response = await octokit.request('GET /repos/{owner}/{repo}/issues', params);
-        let filteredIssues = cleanIssues(response, date_last);
-        return filteredIssues;
-    } catch (error) {
-        console.error(`Error ${error.status} while fetching issues:`, error);
-    }
-}
-
-function cleanIssues(response, date_last){
-    
-    return response.data.map(issue => {
-        const updateDate = new Date(issue.updated_at);
-        if(updateDate.valueOf() <= date_last.valueOf()){
+        return response.data.map(issue => {
             return {
                 'number': issue.number,
                 'title': issue.title,
                 'labels': issue.labels.map(label => label.name),
                 'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
-                'daysOpen': issue.closed_at == null ? calculateDaysOpen(issue.created_at) : calculateDaysOpen(issue.created_at, issue.closed_at)
-            }
-        }
-        return null;
-    }) 
-    .filter(item => item !== null);;
+                'daysOpen': calculateDaysOpen(issue.created_at, issue.closed_at),
+                'updated_at': issue.updated_at,
+                'state': issue.state
+            };
+        });
+    } catch (error) {
+        console.error(`Error ${error.status} while fetching issues:`, error);
+    }
 }
 
 function calculateDaysOpen(creationString, closedString){
@@ -77,10 +66,10 @@ async function getTokenOwner(){
         }
     }) 
     .then(response => {
-        console.log(`\nRETRIEVING ISSUES WITH TOKEN OWNED BY ${response.data.name} - @${response.data.login}`);
+        console.log(`\nRECUPERANDO ISSUES COM TOKEN DE PROPRIEDADE DE ${response.data.name} - @${response.data.login}`);
     })
     .catch(error => {
-        console.error('Error fetching user data:', error);
+        console.error('Error ao buscar dados do usuário:', error);
     }); 
 }
 

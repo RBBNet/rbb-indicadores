@@ -1,19 +1,14 @@
-function cleanTimeLine(response, params){
-    return response.data.map(timeline => {
-     if(timeline.event == 'commented'){
-            return {
-                'issue_id': params.repo + params.issue_number,
-                'id': timeline.id,
-                'event': timeline.event,
-                'event_created_at': new Date(timeline.created_at),
-                'user': timeline.user ? '@' + timeline.user.login : null,
-                'body': `${timeline.body}`,
-                
-            }
+function cleanTimeLine(issue){
+    return issue.timelineItems.nodes.map(timeline => {
+        return {
+            'issue_id': issue.repository.name + issue.number,
+            'id': timeline.id,
+            'event': 'commented',
+            'event_created_at': new Date(timeline.createdAt),
+            'user': timeline.author ? '@' + timeline.author.login : null,
+            'body': timeline.body,
         }
-        return null   
     })
-    .filter(item => item !== null);
 }
 
 function cleanIssue(issue){
@@ -40,15 +35,6 @@ function calculateDaysOpen(creationString, closedString){
     }
 
     return ((dateAux - creationDate)/86400000).toFixed(0);
-}
-
-function findProgressTag(text){
-    let Tags = ['#EVOLUÇÃO']
-    for(const tag of Tags){
-        if(text.includes(tag))
-        {return true}
-    }
-    return false
 }
 
 export default { cleanTimeLine, cleanIssue };
