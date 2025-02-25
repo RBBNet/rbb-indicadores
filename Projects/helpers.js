@@ -1,7 +1,7 @@
-function cleanTimeLine(issue){
-    return issue.timelineItems.nodes.map(timeline => {
+function cleanTimeLine(timelineItems, issue_id){
+    let cleanedTL = timelineItems.map(timeline => {
         return {
-            'issue_id': issue.repository.name + issue.number,
+            'issue_id': issue_id,
             'id': timeline.id,
             'event': 'commented',
             'event_created_at': new Date(timeline.createdAt),
@@ -9,10 +9,13 @@ function cleanTimeLine(issue){
             'body': timeline.body,
         }
     })
+
+    return cleanedTL;
 }
 
 function cleanIssue(issue){
     return {
+        'id': issue.id,
         'issue_id':issue.repository.name + issue.number,
         'title': issue.title,
         'labels': issue.labels.nodes.map(label => label.name),

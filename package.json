@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Ferramentas para produção de indicadores operacionais e de governança da RBB",
   "dependencies": {
-    "@octokit/core": "^6.1.2",
+    "@octokit/core": "^6.1.4",
+    "@octokit/plugin-paginate-graphql": "^5.2.4",
     "axios": "^1.7.9",
     "csv-stringify": "^6.5.2",
     "date-fns": "^3.6.0",

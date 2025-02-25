@@ -158,7 +158,8 @@ async function getActiveIssues(refMonth, refYear) {
     let activeIssues = [];
     for(const card of projectKanbamCards){
         const issue = helpers.cleanIssue(card.content);
-        const timeline = helpers.cleanTimeLine(card.content);
+        const timelineItems = await functions.fetchTimelineData(refMonth, refYear, issue.id)
+        const timeline = helpers.cleanTimeLine(timelineItems,issue.issue_id);
         const timelineRefPeriod = timeline.filter(ev => 
             (ev.event_created_at.getMonth() + 1) == refMonth && ev.event_created_at.getFullYear() == refYear
         );

@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/core";
+import { paginateGraphQL } from "@octokit/plugin-paginate-graphql";
 import { fetch , ProxyAgent } from 'undici';
 import helpers from './helpers.js'
 
@@ -14,8 +15,8 @@ if (proxyurl != null) {
       dispatcher: new ProxyAgent(proxyurl),
     });
   };
-
-  octokit = new Octokit({
+  const MyOctokit = Octokit.plugin(paginateGraphQL)
+  octokit = new MyOctokit({
     auth: `${Config.GITHUB_RBB_TOKEN}`,
     request: {
       fetch: myFetch,
@@ -28,7 +29,7 @@ if (proxyurl != null) {
 }
 
 /**
- * 
+ * @deprecated
  * @param {String} repo 
  * @param {Int} number 
  * 
@@ -75,8 +76,77 @@ async function fetchIssueTimelineData(repo, number, refYear, refMonth) {
 }
 
 /**
- * Fetches Issues and their statuses from a Project Kanbam 
- * through GITHUB GraphQL API and filters important information from it
+ * Fetches timeline events of type IssueComment for a specific issue from GitHub GraphQL API.
+ * The function handles pagination to retrieve all relevant events since a specified date.
+ * 
+ * @param {number} refMonth - The reference month for the timeline events.
+ * @param {number} refYear - The reference year for the timeline events.
+ * @param {string} issueID - The node ID of the issue to fetch timeline events for.
+ * @returns {Promise<[{
+*              id: string,
+*              author: { login: string },
+*              body: string,
+*              createdAt: Date
+*          }]>} - A promise that resolves to an array of IssueComment timeline events.
+*/
+async function fetchTimelineData(refMonth, refYear, issueID) {
+    try{
+        const date = new Date(`${refMonth}/1/${refYear}`).toISOString()
+        const query = `
+            query paginate($cursor: String) {
+                node(id: "${issueID}"){
+                ... on Issue{
+                    timelineItems(first: 100, since: "${date}", after: $cursor){
+                        nodes{
+                            ... on IssueComment{
+                                    id
+                                    author{
+                                        login
+                                    }
+                                    body
+                                    createdAt
+                                }
+                        }
+                        pageInfo {
+                            
+                            hasNextPage
+                            endCursor
+                        }
+                    }  
+                }
+            }
+        }
+        `;
+    
+        const data = (await octokit.graphql.paginate(query)).node.timelineItems.nodes;
+        let filteredData =  data.filter(item => (Object.keys(item).length > 0));
+        
+        
+        return filteredData;
+    } 
+    catch (error) {
+        if(error.status == 404){
+            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if repository name and issue number are correct and accessible to you`);
+            process.exit(1);
+        }
+        if(error.status == 401){
+            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if your Github API access token is correctly set up and with the necessary scopes\n ${error.message} \n ${error.request}` );
+            process.exit(2);
+        }
+        if(error.status == 500){    
+            console.error(`\nError ${error.status} while fetching issue Data: ${error}`);
+            process.exit(3);
+        }
+        else{
+            console.error(`\nError ${error.status} while parsing issue Data: ${error.stack}`);
+        }
+    }
+}
+
+
+/**
+ * This function Fetches Issues and their statuses from a Project Kanbam 
+ * through GITHUB GraphQL API handling pagination and filtering important information from it
  * @returns {[{ 
  *              content: {
  *                  title: string,
@@ -95,10 +165,10 @@ async function fetchProjectData(refMonth, refYear) {
         const id = await getProjectID();
         const date = new Date(`${refMonth}/1/${refYear}`).toISOString()
         const query = `
-            query {
+            query paginate($cursor: String) {
                 node(id: "${id}"){
                 ... on ProjectV2{ 
-                    items(first: 100){
+                    items(first: 100, after: $cursor){
                         nodes{
                             content{
                                 ... on Issue{
@@ -160,13 +230,18 @@ async function fetchProjectData(refMonth, refYear) {
                                 }
                             }
                         }
-                    }
+                        pageInfo {
+                            startCursor
+                            hasNextPage
+                            endCursor
+                        }
+                    } 
                 }
             }
         }
         `;
     
-        const data = (await octokit.graphql(query)).node.items.nodes;
+        const data = (await octokit.graphql.paginate(query)).node.items.nodes;
 
         let filteredData =  data.filter(node => (Object.keys(node.content).length > 0) 
         && (node.fieldValueByName && (node.fieldValueByName.status == 'In Progress' || node.fieldValueByName.status == 'Done')));
@@ -212,4 +287,4 @@ async function getProjectID(){
     return organization.projectV2.id;
 }
 
-export default { fetchProjectData, fetchIssueTimelineData };
+export default { fetchProjectData, fetchTimelineData, fetchIssueTimelineData };
