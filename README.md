@@ -61,8 +61,9 @@ Para executar o script no Linux, utilize o seguinte comando na pasta raiz do pro
 O menu interativo permite escolher entre as seguintes opções:
 
 1. **Métricas de Produção de Blocos**: Gera indicadores sobre a produção de blocos.
-2. **Acompanhamento das Iniciativas de Maturação do Piloto**: Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
-3. **Issues em Produção**: Coleta dados sobre o tratamento de incidentes.
-4. **Sair**: Encerra o script.
+2. **Métricas de Análise de Blocos**: Calcula estatísticas do tempo de produção dos blocos.
+3. **Acompanhamento das Iniciativas de Maturação do Piloto**: Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
+4. **Issues em Produção**: Coleta dados sobre o tratamento de incidentes.
+5. **Sair**: Encerra o script.
 
 **Siga as instruções no menu para fornecer os parâmetros necessários para cada ferramenta.**
