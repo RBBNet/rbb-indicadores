@@ -94,21 +94,7 @@ async function getMetrics(){
     let productionTimeInSeconds = date_last_ref_seconds - date_first_seconds;
     // Divide o tempo pelo número total de blocos produzidos realmete
     let averageBlockProductionTime = productionTimeInSeconds / blocksProducedREAL;
-    console.log("Calculando tempos máximo e mínimo de produção...");
-
-    // Calcula o tempo máximo e mínimo entre Blocos (ajuste à amostragem (blockNumber) para 500 ou mais blocos para melhor performance)
-    let blockProductionTimes = [];
-    for (let blockNumber = first_block_number; blockNumber < last_block_number; blockNumber += 500) {
-        const block1 = await provider.getBlock(blockNumber);
-        const block2 = await provider.getBlock(blockNumber + 1);
-        if (block1 && block2) {
-            blockProductionTimes.push(block2.timestamp - block1.timestamp);
-        }
-    }
-    let maxProductionTime = Math.max(...blockProductionTimes);
-    let minProductionTime = Math.min(...blockProductionTimes);
     const nodesByIdMap = new Map();
-
     console.log("Carregando arquivos node.json:");
 
     if(fs.existsSync(nodes_json_folder_path) && fs.lstatSync(nodes_json_folder_path).isDirectory()) {
@@ -164,8 +150,6 @@ async function getMetrics(){
     console.log(`Qtd máx ideal:     ${blocksProducedIDEAL}`);
     console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)*100}%`);
     console.log(`Tempo médio/bloco: ${averageBlockProductionTime.toFixed(2)} segundos`);
-    console.log(`Tempo máximo/bloco: ${maxProductionTime.toFixed(2)} segundos`);
-    console.log(`Tempo mínimo/bloco: ${minProductionTime.toFixed(2)} segundos`);
     
     let filteredResults = result.map(node => ({
         'Organização': node.organization,
@@ -180,9 +164,7 @@ async function getMetrics(){
         Blocos produzidos;${blocksProducedREAL}
         Qtd max ideal;${blocksProducedIDEAL}
         Rendimento;${(blocksProductionRate.toFixed(2)).replace('.', ',')}
-        Tempo medio/bloco (s);${(averageBlockProductionTime.toFixed(2)).replace('.', ',')}
-        Tempo maximo/bloco (s);${(maxProductionTime.toFixed(2)).replace('.', ',')}
-        Tempo minimo/bloco (s);${(minProductionTime.toFixed(2)).replace('.', ',')}\n
+        Tempo medio/bloco (s);${(averageBlockProductionTime.toFixed(2)).replace('.', ',')}\n
         Organizacao; Blocos Produzidos\n`;
         console.table(filteredResults);
         
