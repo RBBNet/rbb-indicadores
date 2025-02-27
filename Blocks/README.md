@@ -59,3 +59,34 @@ Rendimento:        xx%
 └─────────┴─────────────┴───────────────────┘
 Arquivo CSV gerado com sucesso
 ```
+
+## Métricas de Análise de Blocos
+
+A ferramenta `block-analitcs.js` realiza a análise de um arquivo CSV contendo dados de blocos, calculando estatísticas como tempo máximo, mínimo, médio e desvio padrão do tempo de produção dos blocos.
+
+### Utilização
+
+Os parâmetros que a ferramenta utiliza são passados por linha de comando no seguinte formato:
+
+```bash
+node Blocks\block-analitcs.js <caminho_do_arquivo_csv>
+```
+
+Onde:
+
+- `<caminho_do_arquivo_csv>` refere-se ao **path** até o arquivo CSV contendo os dados dos blocos.
+
+Dessa forma, uma possível execução dessa ferramenta seria:
+
+```bash
+node Blocks\block-analitcs.js C://DadosCSV/2025-01/blocks2025-01.csv
+```
+
+A qual retornaria, por exemplo:
+
+```bash
+Tempo máximo/bloco: xxxx segundos
+Tempo mínimo/bloco: xxxx segundos
+Tempo médio/bloco: xxxx segundos
+Desvio padrão do tempo de produção: xxxx segundos
+```
