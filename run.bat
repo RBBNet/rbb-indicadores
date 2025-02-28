@@ -5,7 +5,7 @@ echo ==========================================
 echo          Menu de Ferramentas RBB
 echo ==========================================
 echo 1. Metricas de Producao de Blocos
-echo 2. Metricas de Analise de Blocos
+echo 2. Estatisticas do Tempo de Producao de Blocos
 echo 3. Acompanhamento das Iniciativas de Maturacao do Piloto
 echo 4. Issues em Producao
 echo 5. Sair

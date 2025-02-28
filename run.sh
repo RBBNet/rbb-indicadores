@@ -5,7 +5,7 @@ while true; do
     echo "         Menu de Ferramentas RBB"
     echo "=========================================="
     echo "1. Métricas de Produção de Blocos"
-    echo "2. Métricas de Análise de Blocos"
+    echo "2. Estatísticas do Tempo de Produção de Blocos"
     echo "3. Acompanhamento das Iniciativas de Maturação do Piloto"
     echo "4. Issues em Produção"
     echo "5. Sair"
