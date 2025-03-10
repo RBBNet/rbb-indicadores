@@ -67,9 +67,9 @@ async function main() {
     const quantile99 = ss.quantile(timeDifferences, 0.99);
     
     console.log(`Blocos produzidos: ${blocks.length}`);
-    console.log(`Tempo máximo: ${maxProductionTime}s`);
     console.log(`Tempo mínimo: ${minProductionTime}s`);
     console.log(`Tempo médio: ${meanProductionTime.toFixed(3)}s`);
+    console.log(`Tempo máximo: ${maxProductionTime}s`);
     console.log(`Mediana: ${medianProductionTime}s`);
     console.log(`Desvio padrão: ${stdDevProductionTime.toFixed(3)}s`);
     console.log(`Quantil 99%: ${quantile99}s`);
