@@ -62,8 +62,8 @@ async function main() {
         process.exit(1);
     }
 
-    console.log(`- Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
-    console.log(`- Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
+    console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
+    console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
 
     const initiatives = await loadInitiatives(initiativesFileName);
     // Descobre a coluna do CSV que corresponde ao período de referência
@@ -73,14 +73,13 @@ async function main() {
         console.error('ERRO: O primeiro período de acompanhamento deve ser inicializado manualmente\n');
         process.exit(1);
     }
-    console.log();
 
     console.log('Obtendo iniciativas de Maturação do Piloto...\n');
     const activeIssues = await getActiveIssues(refMonth, refYear);
     if(activeIssues.length == 0) {
         console.error('ERRO: Nenhuma issue ativa encontrada.\n');
     }
-    console.log('Gerando arquivos CSV para comentários e issues...\n');
+    console.log('Gerando arquivos CSV para comentários e issues...');
     await writeTimelineCSV(activeIssues);
     await writeIssueCSV(activeIssues);
     console.log();
@@ -93,22 +92,27 @@ async function main() {
             }
         }
     });
-    console.log(' - Econtrados andamentos para as seguintes issues:\n');
+    console.log('Econtrados andamentos para as seguintes issues:');
     for(let i = 0; i < inProgressIssues.length; ++i) {
         console.log(` - ${inProgressIssues[i].issue.issue_id} - ${inProgressIssues[i].issue.title}`);
     }
     console.log();
 
-    console.log(` - Atualizando andamento das iniciativas...\n`);
+    console.log(`Atualizando andamento das iniciativas...`);
     // Atualiza as iniciativas com andamento
     for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
         const initiativeId = initiatives[i][0];
         // Deve-se acrescentar as contra-barras para o search() funcionar corretamente com expressão regular
         const idTags = initiativeId.replace('][', ']|[').replaceAll('[', '\\[').replaceAll(']', '\\]').split('|');
+        for(const i in idTags) {
+            idTags[i] = idTags[i].toLowerCase();
+        }
+        console.log(` - ${initiativeId}`);
         for(let j = 0; j < inProgressIssues.length; ++j) {
-            const title = inProgressIssues[j].issue.title;
+            const title = inProgressIssues[j].issue.title.toLowerCase();
             if(title.search(idTags[0]) >= 0 && title.search(idTags[1]) >= 0) {
                 initiatives[i][refColumn] = ANDAMENTO;
+                console.log(`   ==> ${inProgressIssues[j].issue.issue_id} teve andamento`);
                 break;
             }
         }
