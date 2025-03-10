@@ -28,20 +28,15 @@ function mapNodes(nodesByIdMap, nodes_json_folder_path, rede) {
 
 async function getMetrics(){
     //obtendo parametros
-    let first_block_number, last_block_number;
-    let date_first, date_last;
-    let json_rpc_address;
-    let nodes_json_folder_path;
-
     if(process.argv.length != 6){
         console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node block-metrics.js <data-inicial> <data-final> <url-json-rpc> <caminho-nodes-json>\n');
         return;
     }
     
-    date_first = process.argv[2];
-    date_last = process.argv[3];
-    json_rpc_address = process.argv[4];
-    nodes_json_folder_path = process.argv[5]; 
+    let date_first = process.argv[2];
+    let date_last = process.argv[3];
+    const json_rpc_address = process.argv[4];
+    const nodes_json_folder_path = process.argv[5]; 
     
     let provider;
     try{
@@ -80,20 +75,20 @@ async function getMetrics(){
     // Adiciona 1 dia à data final, para equivaler a <data_final> 24:00:00 -> Intervalo aberto no final do período
     const date_last_ref = addDays(date_last, 1);
 
-    first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
+    const first_block_number = await helpers.gets_block_number_by_date(date_first, provider);
     // Diminui 1 bloco, pois utilizando date_last_ref obtem-se o primeiro bloco do dia seguinte à data final
-    last_block_number = await helpers.gets_block_number_by_date(date_last_ref, provider) - 1;
+    const last_block_number = await helpers.gets_block_number_by_date(date_last_ref, provider) - 1;
 
-    let blocksProducedREAL = last_block_number-first_block_number+1;
-    let date_first_seconds = date_first.valueOf()/1000;
-    let date_last_ref_seconds = date_last_ref.valueOf()/1000;
-    let blocksProducedIDEAL = parseInt((date_last_ref_seconds - date_first_seconds)/4)
-    let blocksProductionRate = blocksProducedREAL/blocksProducedIDEAL;
+    const blocksProducedREAL = last_block_number-first_block_number+1;
+    const date_first_seconds = date_first.valueOf()/1000;
+    const date_last_ref_seconds = date_last_ref.valueOf()/1000;
+    const blocksProducedIDEAL = parseInt((date_last_ref_seconds - date_first_seconds)/4)
+    const blocksProductionRate = (blocksProducedREAL/blocksProducedIDEAL) * 100;
 
     // Calcula o tempo total em segundos entre o primeiro e o último bloco
-    let productionTimeInSeconds = date_last_ref_seconds - date_first_seconds;
+    const productionTimeInSeconds = date_last_ref_seconds - date_first_seconds;
     // Divide o tempo pelo número total de blocos produzidos realmete
-    let averageBlockProductionTime = productionTimeInSeconds / blocksProducedREAL;
+    const averageBlockProductionTime = productionTimeInSeconds / blocksProducedREAL;
     const nodesByIdMap = new Map();
     console.log("Carregando arquivos node.json:");
 
@@ -109,8 +104,10 @@ async function getMetrics(){
     let responses = [];
     const INTERVAL_DAYS = 7; // Padrão de intervalo de tempo
 
-    while (date_first < date_last_ref) {
-        let step_date_ref = addDays(date_first, INTERVAL_DAYS);
+    let start_block = first_block_number;
+    let date_start = date_first;
+    while (date_start < date_last_ref) {
+        let step_date_ref = addDays(date_start, INTERVAL_DAYS);
         // Ajusta o intervalo se os dias restantes forem menores que o intervalo padrão
         if (step_date_ref > date_last_ref) {
             step_date_ref = date_last_ref;
@@ -118,15 +115,15 @@ async function getMetrics(){
 
         // Data apenas para exibição na console
         const step_date = addDays(step_date_ref, -1);
-        console.log(`PERÍODO ${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth() + 1}/${step_date.getFullYear()}`);
+        console.log(`PERÍODO ${date_start.getDate()}/${date_start.getMonth() + 1}/${date_start.getFullYear()} A ${step_date.getDate()}/${step_date.getMonth() + 1}/${step_date.getFullYear()}`);
         
         // Não diminui um bloco (como feito acima para last_block_number), pois a API do Besu espera intervalo aberto no parâmetro de bloco final
         const step_block = await helpers.gets_block_number_by_date(step_date_ref, provider);
 
-        responses.push(await blockProductionMetrics(json_rpc_address, first_block_number, step_block, nodesByIdMap));
+        responses.push(await blockProductionMetrics(json_rpc_address, start_block, step_block, nodesByIdMap));
         
-        date_first = step_date_ref;
-        first_block_number = step_block;
+        date_start = step_date_ref;
+        start_block = step_block;
     }
 
     responses = responses.flat();
@@ -148,8 +145,8 @@ async function getMetrics(){
     console.log(`Bloco final:       ${last_block_number}`);
     console.log(`Blocos produzidos: ${blocksProducedREAL}`);
     console.log(`Qtd máx ideal:     ${blocksProducedIDEAL}`);
-    console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)*100}%`);
-    console.log(`Tempo médio/bloco: ${averageBlockProductionTime.toFixed(2)} segundos`);
+    console.log(`Rendimento:        ${blocksProductionRate.toFixed(2)}%`);
+    console.log(`Tempo médio/bloco: ${averageBlockProductionTime.toFixed(3)} segundos`);
     
     let filteredResults = result.map(node => ({
         'Organização': node.organization,
@@ -158,14 +155,14 @@ async function getMetrics(){
 
     let file_header =
         `Data inicial;${date_first.getDate()}/${date_first.getMonth() + 1}/${date_first.getFullYear()}
-        Data final;${date_last.getDate()}/${date_last.getMonth() + 1}/${date_last.getFullYear()}
-        Bloco inicial;${first_block_number}
-        Bloco final;${last_block_number}
-        Blocos produzidos;${blocksProducedREAL}
-        Qtd max ideal;${blocksProducedIDEAL}
-        Rendimento;${(blocksProductionRate.toFixed(2)).replace('.', ',')}
-        Tempo medio/bloco (s);${(averageBlockProductionTime.toFixed(2)).replace('.', ',')}\n
-        Organizacao; Blocos Produzidos\n`;
+Data final;${date_last.getDate()}/${date_last.getMonth() + 1}/${date_last.getFullYear()}
+Bloco inicial;${first_block_number}
+Bloco final;${last_block_number}
+Blocos produzidos;${blocksProducedREAL}
+Qtd max ideal;${blocksProducedIDEAL}
+Rendimento;${(blocksProductionRate.toFixed(2)).replace('.', ',')}
+Tempo medio/bloco (s);${(averageBlockProductionTime.toFixed(3)).replace('.', ',')}\n
+Organizacao; Blocos Produzidos\n`;
         console.table(filteredResults);
         
     helpers.write_csv(file_header,filteredResults);
