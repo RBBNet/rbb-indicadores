@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import os
 import sys
 import json
@@ -38,8 +41,8 @@ else:
             "block_time": float(os.getenv("BLOCK_TIME", 5)),
             "request_timeout": float(os.getenv("REQUEST_TIMEOUT", 2)),
             "p_operator_absence": float(os.getenv("P_OPERATOR_ABSENCE", 0.1)),
-            "T_fail": float(os.getenv("T_FAIL", 21600)),
-            "simulation_duration": int(os.getenv("SIMULATION_DURATION", 3 * 86400)),
+            "T_fail": float(os.getenv("T_fail", 21600)),
+            "simulation_duration_days": int(os.getenv("simulation_duration_days", 3)),
             "num_validators": int(os.getenv("NUM_VALIDATORS", 10)),
             "mean_offline_time": float(os.getenv("MEAN_OFFLINE_TIME", 3600)),
             "meeting_interval_in_hours": int(os.getenv("MEETING_INTERVAL_HOURS"), 5)
@@ -51,8 +54,7 @@ else:
 # Simulation parameters from config (with defaults)
 # ============================
 dt = 1  # simulation time-step (seconds)
-simulation_duration = int(config.get("simulation_duration", 3 * 86400))
-simulation_duration = simulation_duration * 86400 # isso vai permitir colocar em dias ao invés de segundos
+simulation_duration = int(config.get("simulation_duration_days", 3)) * 86400 # isso vai permitir colocar em dias ao invés de segundos
 num_validators = int(config.get("num_validators", 10))
 meeting_interval_in_hours = int(config.get("meeting_interval_in_hours", 5))
 # --- QBFT Block production parameters ---
@@ -79,13 +81,16 @@ mean_offline_time = float(config.get("mean_offline_time", 3600))  # mean offline
 # Define a simple Validator class.
 # ============================
 class Validator:
-    def __init__(self, vid,operator_reliability = 1 - p_operator_absence):
+    def __init__(self, vid, operator_reliability=1 - p_operator_absence):
         self.id = vid
         self.state = "online"  # "online" means working; "failing" means it has failed.
         self.included = True  # Whether the validator is currently in the network’s validator list.
         self.offline_timer = 0  # When failing, counts down the remaining seconds offline.
         self.operator_reliability = operator_reliability
         self.operator_present = False
+        # New: list to track offline intervals, and a temporary variable for start time.
+        self.offline_intervals = []
+        self.offline_start = None
 
 # ============================
 # Initialize Validators
@@ -127,6 +132,13 @@ def debug_print(message, t=None):
         prefix = f"t={format_time(t)}: " if t is not None else ""
         print(f"[DEBUG] {prefix}{message}")
 
+def pause(message, double = True):
+    if not stop_after is None:
+        print(message + " Press any key to continue...")
+        input()
+        if double:
+            input()
+
 # ============================
 # Main simulation loop (dt = 1 second)
 # ============================
@@ -135,88 +147,141 @@ def update_validators_states(dt, lambda_fail, mean_offline_time, validators, t):
         if validator.state == "online":
             if random.random() < lambda_fail * dt:
                 validator.state = "failing"
+                # Record when the validator goes offline.
+                validator.offline_start = t
                 validator.offline_timer = random.expovariate(1 / mean_offline_time)
-                debug_print(f"Validator {validator.id} transitioning to failing (offline_timer={validator.offline_timer:.2f})", t)
+                pause(f"Validator {validator.id} transitioning to failing (offline_timer={validator.offline_timer:.2f})", False)
         elif validator.state == "failing":
             validator.offline_timer -= dt
             if validator.offline_timer <= 0:
                 validator.state = "online"
-                debug_print(f"Validator {validator.id} recovered and is now online", t)
+                # Record the offline interval.
+                if validator.offline_start is not None:
+                    validator.offline_intervals.append((validator.offline_start, t))
+                    validator.offline_start = None
+                pause(f"Validator {validator.id} recovered and is now online", False)
 
 def restart_quorum_met(validators, t):
     """
     Checks if the operator quorum is met for restarting block production.
-    This function updates each validator's operator_present attribute,
-    prints debug info, and returns True if more than 2/3 of included validators
+    Returns True if more than 2/3 of included validators
     (that are online) are present in the meeting.
     """
-    included_validators = [v for v in validators if v.included]
-    # Update operator presence for all validators.
-    for validator in validators:
-        validator.operator_present = random.random() < validator.operator_reliability
-
-    count_attending = sum(1 for v in validators if v.included and v.state == "online" and v.operator_present)
-    debug_print(f"(Network down) Meeting attendance - {count_attending} out of {len(included_validators)}", t)
-    return count_attending > (2 / 3) * len(included_validators)
+    count_included_online_present = sum(1 for v in validators if v.included and v.state == "online" and v.operator_present)
+    count_included = sum(1 for v in validators if v.included)
+    debug_print(f"Meeting attendance for restart - {count_included_online_present} out of {count_included}", t)
+    return count_included_online_present > (2 / 3) * count_included
 
 def include_exclude_quorum_met(validators, t):
     """
     Determines if the meeting quorum is met for inclusion/exclusion changes.
-    Updates each validator's operator presence, prints debug info,
-    and returns True if more than half of the included and online validators are present.
+    Returns True if more than half of the included and online validators are present.
     """
-    included_validators = [v for v in validators if v.included]
-    # Update operator presence for all validators.
-    for validator in validators:
-        validator.operator_present = random.random() < validator.operator_reliability
-
-    count_attending = sum(1 for v in validators if v.included and v.state == "online" and v.operator_present)
-    debug_print(f"Meeting attendance - {count_attending} out of {len(included_validators)}", t)
-    return count_attending > (len(included_validators) / 2)
+    count_included_online_present = sum(1 for v in validators if v.included and v.state == "online" and v.operator_present)
+    count_included = sum(1 for v in validators if v.included)
+    debug_print(f"Meeting attendance for include/exclude - {count_included_online_present} out of {count_included}", t)
+    return count_included_online_present > (count_included / 2)
 
 def include_exclude_validators(validators_to_exclude, validators_to_include, t):
     """
     Excludes and re-includes validators based on the provided lists.
     """
+    debug_print("=========================================================================", t)
     for validator in validators_to_exclude:
         validator.included = False
         debug_print(f"Validator {validator.id} excluded due to failure", t)
     for validator in validators_to_include:
         validator.included = True
         debug_print(f"Validator {validator.id} re-included as it recovered", t)
+    debug_print("=========================================================================", t)
 
+def calculate_operators_presence(validators, t):
+    """
+    Calculate the presence of operators for each validator.
+    """
+    for validator in validators:
+        validator.operator_present = random.random() < validator.operator_reliability
+        
+    count_attending = sum(1 for v in validators if v.operator_present)
+    debug_print(f"Total meeting attendance - {count_attending} out of {len(validators)}", t)
 
-# ------------------------------------------------------------
-# --- Simulation loop ---
-# ------------------------------------------------------------
+def consensus_quorum_met(validators):
+    included_validators = [v for v in validators if v.included]
+    total_included = len(included_validators)
+    active_validators = sum(1 for v in included_validators if v.state == "online")
+    network_currently_up = total_included > 0 and (active_validators / total_included > consensus_quorum_fraction)
+    return network_currently_up
+
+def network_is_up(validators):
+    return consensus_quorum_met(validators)
+
 for t in range(simulation_duration):
     # --- Update validator states: failure and recovery.
     update_validators_states(dt, lambda_fail, mean_offline_time, validators, t)
 
+    # --- Check whether the network is up or down
+    network_currently_down = not network_is_up(validators)
+
+    # --- Record all the time the network is up ---
+    if not network_currently_down:        
+        network_up_time += dt
+
+    # --- When the network goes down
+    if network_currently_down and not network_down:
+        # This is the time network went down.
+        # This variable goes down anytime, but only goes up during the meeting. 
+        network_down = True
+        # Record the uptime interval until now.
+        uptime_intervals.append((current_uptime_start, t))
+        debug_print("=========================================================================", t)
+        debug_print(f"Network went down; recorded uptime interval from {current_uptime_start} to {t}", t)
+        debug_print("=========================================================================", t)
+        if not stop_after is None:
+            print(f"Simulation paused after network went down. Press any key to continue...")
+            input()
+        # Although it could continue the loop because it may be the time for meeting, 
+        # I prefer to skip the loop for simplicity.
+        continue
+
     # --- If the network is down, and it's not time for a meeting, skip the rest of the loop. ---
-    # --- It means that the network only recovers during a meeting, independent of the states of the validators. 
     if network_down and t % meeting_interval_in_seconds != 0:
-        debug_print("Network is down; skipping time step", t)
         continue
 
     # --- Meeting time check ---
     if t % meeting_interval_in_seconds == 0 and t != 0:
+        log_network_down = True
+        debug_print("=========================================================================", t)
         debug_print("Meeting time", t)
+        debug_print("=========================================================================", t)
+        # Print the status of each validator (if it is included and if it is online). 
+        for validator in validators:
+            debug_print(f"Validator {validator.id}: {'Included' if validator.included else 'Excluded'}, {validator.state}", t)
+        pause(f"Simulation paused at meeting time.")
+
+        # Calculate whether operators are attending this meeting
+        calculate_operators_presence(validators, t)
 
         if network_down:
-            debug_print("Network is down; checking for quorum to restart block production", t)
-            # Use the restart_quorum function to decide if block production should restart.
+            debug_print("Checking for quorum to restart block production", t)
+            # Use the restart_quorum function to decide whether block production should restart.
             if restart_quorum_met(validators, t):
+                debug_print("=========================================================================", t)
                 debug_print("Restarting block production", t)
+                debug_print("=========================================================================", t)
+                pause(f"Simulation paused after meeting.")
                 # --- Restart block production ---
                 last_block_time = t  # record the time production restarts
                 next_block_time = last_block_time + block_time
                 proposer_index = 0
                 consecutive_failure_count = 0
                 network_down = False
+                current_uptime_start = t
             else:
                 # Restart quorum not met; network remains down.
+                debug_print("=========================================================================", t)
                 debug_print("Meeting quorum not met; network remains down", t)
+                debug_print("=========================================================================", t)
+                pause(f"Simulation paused after meeting.")
                 # --- Resume the loop 
                 continue
         else:
@@ -229,41 +294,19 @@ for t in range(simulation_duration):
                 if include_exclude_quorum_met(validators, t):
                     debug_print("Meeting quorum met", t)
                     include_exclude_validators(validators_to_exclude, validators_to_include, t)
+                    pause(f"Simulation paused after meeting.")
             else:
                 debug_print("Meeting not needed (no validators to fix)", t)
+                pause(f"Simulation paused after meeting.")
 
-    # --- Determine network consensus quorum based on the current included validators. 
-    included_validators = [v for v in validators if v.included]
-    total_included = len(included_validators)
-    active_validators = sum(1 for v in included_validators if v.state == "online")
-    network_currently_up = total_included > 0 and (active_validators / total_included > consensus_quorum_fraction)
-
-    if network_currently_up:
-        # --- Record all the time the network is up ---
-        network_up_time += dt
-
-    # --- When state of the network changes...  
-    if network_currently_up != last_network_status:
-        last_network_status = network_currently_up
-        if not network_currently_up:
-            # It went down.
-            network_down = True
-            # Record the uptime interval until now.
-            uptime_intervals.append((current_uptime_start, t))
-            debug_print(f"Network went down; recorded uptime interval from {current_uptime_start} to {t}", t)
-        else:
-            # It went up, so we need to reset the current uptime start for a future uptime interval. 
-            current_uptime_start = t
-
+  
     # Inside the block production event:
     if t >= next_block_time:
         included_validators = [v for v in validators if v.included]
         included_validators.sort(key=lambda v: v.id)
         designated_proposer = included_validators[proposer_index % len(included_validators)]
-        active_validators_count = sum(1 for v in included_validators if v.state == "online")
-        consensus_quorum = (active_validators_count / len(included_validators)) >= consensus_quorum_fraction
 
-        if consensus_quorum and designated_proposer.state == "online":
+        if consensus_quorum_met(validators) and designated_proposer.state == "online":
             # Block is produced successfully.
             block_timestamps.append(t)
             last_block_time = t  # update the reference time for the next block
@@ -280,13 +323,13 @@ for t in range(simulation_duration):
             penalty = (2 ** (consecutive_failure_count - 1)) * request_timeout
             next_block_time = last_block_time + block_time + penalty
             debug_print(
-                f"Block attempt by Validator {designated_proposer.id} failed (consensus_quorum: {consensus_quorum}, state: {designated_proposer.state}), penalty = {penalty}",
+                f"Block attempt by Validator {designated_proposer.id} failed (state: {designated_proposer.state}), penalty = {penalty}",
                 t
             )
         proposer_index = (proposer_index + 1) % len(included_validators)    
 
 # --- End-of-simulation:
-if last_network_status and current_uptime_start is not None:
+if not network_down and current_uptime_start is not None:
     uptime_intervals.append((current_uptime_start, simulation_duration))
 
 # ============================
@@ -324,6 +367,7 @@ else:
     max_productive_block_time = None
 
 print("Simulation SLAs:")
+print(f"Total simulation time: {simulation_duration} seconds")
 print(f"Percentage of time network producing blocks: {network_producing_percentage:.2f}%")
 if average_block_time is not None:
     print(f"Average time to produce one block: {average_block_time:.2f} seconds")
@@ -337,3 +381,54 @@ if max_productive_block_time is not None:
     print(f"Maximum time to produce a block (excluding downtime): {max_productive_block_time:.2f} seconds")
 else:
     print("Not enough block events to calculate maximum productive block time.")
+
+# ----- End-of-simulation extra reporting (only if not in debug mode) -----
+if not debug:
+    print("\nAdditional Simulation Details:")
+
+    # 1. Print every time interval a node was offline.
+    print("\nOffline intervals per node:")
+    for validator in validators:
+        if validator.offline_intervals:
+            print(f"Validator {validator.id}:")
+            for (start, end) in validator.offline_intervals:
+                duration = end - start
+                print(f"  Offline from t={start} to t={end} (Duration {duration} seconds)")
+        else:
+            print(f"Validator {validator.id}: Always online.")
+
+    # 2. Compute and print every time interval the network was NOT producing blocks.
+    downtime_intervals = []
+    previous_end = 0
+    for (u_start, u_end) in sorted(uptime_intervals):
+        if u_start > previous_end:
+            downtime_intervals.append((previous_end, u_start))
+        previous_end = u_end
+    if previous_end < simulation_duration:
+        downtime_intervals.append((previous_end, simulation_duration))
+    
+    print("\nNetwork downtime intervals (NOT producing blocks):")
+    if downtime_intervals:
+        for (start, end) in downtime_intervals:
+            duration = end - start
+            print(f"  Downtime from t={start} to t={end} (Duration {duration} seconds)")
+    else:
+        print("  None. The network produced blocks continuously.")
+
+    # 3. Generate and save a histogram using matplotlib
+    if len(block_timestamps) > 1:
+        block_intervals = [max(block_timestamps[i] - block_timestamps[i - 1], 3)
+                           for i in range(1, len(block_timestamps))]
+    
+        plt.figure(figsize=(10, 6))
+        bins = range(3, int(max(block_intervals)) + 2)
+        plt.hist(block_intervals, bins=bins, edgecolor='black')
+        plt.title("Histogram of Block Production Intervals")
+        plt.xlabel("Block Interval (seconds)")
+        plt.ylabel("Frequency")
+        plt.tight_layout()
+    
+        plt.savefig("block_histogram.png")
+        print("Histogram saved to 'block_histogram.png'")
+    else:
+        print("\nNot enough block events to plot block intervals.")
