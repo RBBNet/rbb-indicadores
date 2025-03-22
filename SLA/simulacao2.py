@@ -32,47 +32,33 @@ if os.path.exists("simulation_config.json"):
     with open("simulation_config.json") as f:
         config = json.load(f)
 else:
-    # Fallback: try loading from a .env file using python-dotenv
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-        config = {
-            "block_time": float(os.getenv("BLOCK_TIME", 5)),
-            "request_timeout": float(os.getenv("REQUEST_TIMEOUT", 2)),
-            "p_operator_absence": float(os.getenv("P_OPERATOR_ABSENCE", 0.1)),
-            "T_fail": float(os.getenv("T_fail", 21600)),
-            "simulation_duration_days": int(os.getenv("simulation_duration_days", 3)),
-            "num_validators": int(os.getenv("NUM_VALIDATORS", 10)),
-            "mean_offline_time": float(os.getenv("MEAN_OFFLINE_TIME", 3600)),
-            "meeting_interval_in_hours": int(os.getenv("MEETING_INTERVAL_HOURS"), 5)
-        }
-    except ImportError:
-        config = {}
+    print("No configuration file found. Using default parameters.")
 
 # ============================
 # Simulation parameters from config (with defaults)
 # ============================
 dt = 1  # simulation time-step (seconds)
-simulation_duration = int(config.get("simulation_duration_days", 3)) * 86400 # isso vai permitir colocar em dias ao invés de segundos
+simulation_duration = int(config.get("simulation_duration_days", 3)) * 86400
 num_validators = int(config.get("num_validators", 10))
 meeting_interval_in_hours = int(config.get("meeting_interval_in_hours", 5))
-# --- QBFT Block production parameters ---
-block_time = float(config.get("block_time", 5))  # base time interval between blocks (seconds)
-request_timeout = float(
-    config.get("request_timeout", 2))  # additional delay (seconds) if designated proposer is failing
+block_time = float(config.get("block_time", 5))
+request_timeout = float(config.get("request_timeout", 2))
 
 # --- Quorum threshold for block production ---
-consensus_quorum_fraction = 2/3  # at least 2/3 of the included validators must be online.
+consensus_quorum_fraction = 2/3
 
 # --- Meeting parameters ---
-meeting_time_offset = 11 * 3600  # meeting occurs at 11:00am (in seconds)
-p_operator_absence = float(config.get("p_operator_absence", 0.1))  # chance an operator does not attend
+meeting_time_offset = 11 * 3600
+p_operator_absence = float(config.get("p_operator_absence", 0.1))
 
 # --- Failure and recovery parameters ---
-T_fail = float(config.get("T_fail", 21600))  # mean time to failure (seconds)
-lambda_fail = 1 / T_fail  # failure rate (per second)
-mean_offline_time = float(config.get("mean_offline_time", 3600))  # mean offline time (seconds)
+T_fail = float(config.get("T_fail_minutes", 32)) * 60
+lambda_fail = 1 / T_fail
+# Two offline time parameters:
+mean_short_offline_time = float(config.get("mean_short_offline_time", 60))
+mean_long_offline_time = float(config.get("mean_long_offline_time", 19800))
+# probability of short offline time
+p_short_offline = float(config.get("p_short_offline", 0.8)) 
 
 
 
@@ -142,15 +128,21 @@ def pause(message, double = True):
 # ============================
 # Main simulation loop (dt = 1 second)
 # ============================
-def update_validators_states(dt, lambda_fail, mean_offline_time, validators, t):
+def update_validators_states(validators, t):
     for validator in validators:
         if validator.state == "online":
             if random.random() < lambda_fail * dt:
                 validator.state = "failing"
                 # Record when the validator goes offline.
                 validator.offline_start = t
-                validator.offline_timer = random.expovariate(1 / mean_offline_time)
-                pause(f"Validator {validator.id} transitioning to failing (offline_timer={validator.offline_timer:.2f})", False)
+                # Choose between the short or long offline time.
+                if random.random() < p_short_offline:
+                    validator.offline_timer = random.expovariate(1 / mean_short_offline_time)
+                    debug_print(f"Validator {validator.id} transitioning to failing with SHORT offline period (timer={validator.offline_timer:.2f})", t)
+                else:
+                    validator.offline_timer = random.expovariate(1 / mean_long_offline_time)
+                    debug_print(f"Validator {validator.id} transitioning to failing with LONG offline period (timer={validator.offline_timer:.2f})", t)
+                pause(f"Validator {validator.id} transitioning to failing", False)
         elif validator.state == "failing":
             validator.offline_timer -= dt
             if validator.offline_timer <= 0:
@@ -215,9 +207,14 @@ def consensus_quorum_met(validators):
 def network_is_up(validators):
     return consensus_quorum_met(validators)
 
+# ----- Main simulation loop (dt = 1 second) -----
+progress_interval = max(1, simulation_duration // 100)  # update every 1%
 for t in range(simulation_duration):
+    if not debug and t % progress_interval == 0:
+        print(f"Simulation progress: {t/simulation_duration*100:.1f}% complete")
+    
     # --- Update validator states: failure and recovery.
-    update_validators_states(dt, lambda_fail, mean_offline_time, validators, t)
+    update_validators_states(validators, t)
 
     # --- Check whether the network is up or down
     network_currently_down = not network_is_up(validators)
@@ -415,20 +412,23 @@ if not debug:
     else:
         print("  None. The network produced blocks continuously.")
 
-    # 3. Generate and save a histogram using matplotlib
-    if len(block_timestamps) > 1:
-        block_intervals = [max(block_timestamps[i] - block_timestamps[i - 1], 3)
-                           for i in range(1, len(block_timestamps))]
-    
-        plt.figure(figsize=(10, 6))
-        bins = range(3, int(max(block_intervals)) + 2)
-        plt.hist(block_intervals, bins=bins, edgecolor='black')
-        plt.title("Histogram of Block Production Intervals")
-        plt.xlabel("Block Interval (seconds)")
-        plt.ylabel("Frequency")
+    # ----- Generate a histogram for validator offline durations (10-min bins) -----
+    offline_durations = []
+    for validator in validators:
+        for (start, end) in validator.offline_intervals:
+            offline_durations.append(end - start)
+
+    if offline_durations:     
+        plt.figure(figsize=(10,6))
+        plt.hist(offline_durations, bins=50, edgecolor='black')
+        plt.xlabel("Duração Offline (segundos)")
+        plt.ylabel("Número de ocorrências")
+        plt.title("Distribuição dos períodos offline dos validadores")
+        plt.grid(True)
         plt.tight_layout()
-    
-        plt.savefig("block_histogram.png")
-        print("Histogram saved to 'block_histogram.png'")
+        
+        plt.savefig("offline_histogram.png")
+        plt.close()
+        print("Offline histogram saved to 'offline_histogram.png'")
     else:
-        print("\nNot enough block events to plot block intervals.")
+        print("\nNo offline intervals recorded for validators.")

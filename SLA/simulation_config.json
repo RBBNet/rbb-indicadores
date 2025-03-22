@@ -2,9 +2,11 @@
     "block_time": 4,
     "request_timeout": 8,
     "p_operator_absence": 0.25,
-    "T_fail": 2592000,
-    "mean_offline_time": 3600,
-    "simulation_duration_days": 30,
+    "T_fail_minutes": 32,
+    "mean_long_offline_time": 19800,
+    "mean_short_offline_time": 60,
+    "p_short_offline": 0.8,
+    "simulation_duration_days": 150,
     "num_validators": 7,
     "meeting_interval_in_hours": 24
 }
