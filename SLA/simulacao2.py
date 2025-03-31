@@ -5,23 +5,18 @@ import os
 import sys
 import json
 import random
+import argparse
+import pandas as pd
 
-# Enable debug mode if '--debug' is passed on the command line.
-debug = '--debug' in sys.argv
-if debug:
-    print("[DEBUG] Debug mode enabled.")
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Simulate validator failures and full simulation")
+parser.add_argument("--stop", type=int, help="Pause simulation after x blocks produced")
+parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+parser.add_argument("--distonly", action="store_true", help="Simulate only the distribution of failures and output CSV")
+args = parser.parse_args()
 
-# New: Optional simulation stop flag to pause after a certain number of blocks are produced.
-stop_after = None
-if "--stop" in sys.argv:
-    stop_index = sys.argv.index("--stop")
-    try:
-        stop_after = int(sys.argv[stop_index + 1])
-        if debug:
-            print(f"[DEBUG] Simulation will pause after {stop_after} blocks are produced.")
-    except (IndexError, ValueError):
-        print("Usage: --stop <number>")
-        sys.exit(1)
+debug = args.debug
+stop_after = args.stop
 
 # ============================
 # Load configuration
@@ -52,16 +47,38 @@ meeting_time_offset = 11 * 3600
 p_operator_absence = float(config.get("p_operator_absence", 0.1))
 
 # --- Failure and recovery parameters ---
-T_fail = float(config.get("T_fail_minutes", 32)) * 60
-lambda_fail = 1 / T_fail
-# Two offline time parameters:
-mean_short_offline_time = float(config.get("mean_short_offline_time", 60))
-mean_long_offline_time = float(config.get("mean_long_offline_time", 19800))
-# probability of short offline time
-p_short_offline = float(config.get("p_short_offline", 0.8)) 
+# Expected time (in days) between short failures per validator.
+T_fails_short = float(config.get("T_fails_short_days", 1)) * 24 * 60 * 60   # transforming to seconds
+# Expected time (in days) between long failures per validator.
+T_fails_long = float(config.get("T_fails_long_days", 10)) * 24 * 60 * 60 # transforming to seconds
 
+lambda_fail_short = 1 / T_fails_short
+lambda_fail_long = 1 / T_fails_long
 
+# Expected time (in minutes) for short offline periods.
+mean_short_offline_time = float(config.get("mean_short_offline_minutes", 5)) * 60   #transforming to seconds
+# Expected time (in hours) for long offline periods.
+mean_long_offline_time = float(config.get("mean_long_offline_hours", 12)) * 60 * 60 #transforming to seconds
 
+# -----------------------------
+# Print simulation configuration:
+# -----------------------------
+print("Simulation configuration parameters:")
+print(f" dt = {dt} second(s)")
+print(f" simulation_duration = {simulation_duration} second(s)")
+print(f" num_validators = {num_validators}")
+print(f" meeting_interval_in_hours = {meeting_interval_in_hours} hour(s)")
+print(f" block_time = {block_time} second(s)")
+print(f" request_timeout = {request_timeout} second(s)")
+print(f" consensus_quorum_fraction = {consensus_quorum_fraction}")
+print(f" meeting_time_offset = {meeting_time_offset} second(s)")
+print(f" p_operator_absence = {p_operator_absence}")
+print(f" T_fail_short = {T_fails_short} second(s)")
+print(f" lambda_fail_short = {lambda_fail_short}")
+print(f" T_fail_long = {T_fails_long} second(s)")
+print(f" lambda_fail_long = {lambda_fail_long}")
+print(f" mean_short_offline_time = {mean_short_offline_time} second(s)")
+print(f" mean_long_offline_time = {mean_long_offline_time} second(s)")
 
 # ============================
 # Define a simple Validator class.
@@ -131,28 +148,31 @@ def pause(message, double = True):
 def update_validators_states(validators, t):
     for validator in validators:
         if validator.state == "online":
-            if random.random() < lambda_fail * dt:
+            # Draw one random number per time-step
+            r = random.random()
+            # Check for short failure:
+            if r < lambda_fail_short * dt:
                 validator.state = "failing"
-                # Record when the validator goes offline.
                 validator.offline_start = t
-                # Choose between the short or long offline time.
-                if random.random() < p_short_offline:
-                    validator.offline_timer = random.expovariate(1 / mean_short_offline_time)
-                    debug_print(f"Validator {validator.id} transitioning to failing with SHORT offline period (timer={validator.offline_timer:.2f})", t)
-                else:
-                    validator.offline_timer = random.expovariate(1 / mean_long_offline_time)
-                    debug_print(f"Validator {validator.id} transitioning to failing with LONG offline period (timer={validator.offline_timer:.2f})", t)
+                validator.offline_timer = random.expovariate(1 / mean_short_offline_time)
+                debug_print(f"Validator {validator.id} transitioning to failing with SHORT offline period (timer={validator.offline_timer:.2f})", t)
+                pause(f"Validator {validator.id} transitioning to failing", False)
+            # Check for long failure (using "elif" so that both can't occur in the same time-step):
+            elif r < (lambda_fail_short + lambda_fail_long) * dt:
+                validator.state = "failing"
+                validator.offline_start = t
+                validator.offline_timer = random.expovariate(1 / mean_long_offline_time)
+                debug_print(f"Validator {validator.id} transitioning to failing with LONG offline period (timer={validator.offline_timer:.2f})", t)
                 pause(f"Validator {validator.id} transitioning to failing", False)
         elif validator.state == "failing":
             validator.offline_timer -= dt
             if validator.offline_timer <= 0:
                 validator.state = "online"
-                # Record the offline interval.
                 if validator.offline_start is not None:
                     validator.offline_intervals.append((validator.offline_start, t))
                     validator.offline_start = None
                 pause(f"Validator {validator.id} recovered and is now online", False)
-
+                
 def restart_quorum_met(validators, t):
     """
     Checks if the operator quorum is met for restarting block production.
@@ -206,6 +226,40 @@ def consensus_quorum_met(validators):
 
 def network_is_up(validators):
     return consensus_quorum_met(validators)
+
+
+# ----- Just generate the failures ----------------#
+if args.distonly:
+    progress_interval = max(1, simulation_duration // 100)  # progress every 1%
+    for t in range(simulation_duration):
+        if not debug and t % progress_interval == 0:
+            print(f"Simulation progress: {t/simulation_duration*100:.1f}% complete")
+        update_validators_states(validators, t)
+    print("Distribution-only simulation complete.")
+    
+    # ----- End-of-simulation: CSV output -----
+    simulation_start_timestamp = pd.Timestamp('2024-07-01 00:00:00')
+    rows = []
+    for validator in validators:
+        for (start, end) in validator.offline_intervals:
+            data_inicial = simulation_start_timestamp + pd.to_timedelta(start, unit='s')
+            data_final = simulation_start_timestamp + pd.to_timedelta(end, unit='s')
+            rows.append({
+                'missingValidator': validator.id,
+                'Instituição': '',
+                'Data inicial': data_inicial.strftime('%d/%m/%Y %H:%M:%S'),
+                'Data final': data_final.strftime('%d/%m/%Y %H:%M:%S')
+            })
+    
+    if rows:
+        output_df = pd.DataFrame(rows)
+        output_filename = "dados_sim.csv"
+        output_df.to_csv(output_filename, sep=';', index=False, encoding='latin-1')
+        print(f"CSV file generated: '{output_filename}'")
+    else:
+        print("No offline intervals recorded for validators.")
+    
+    sys.exit(0)  # Exit so the full simulation does not run.
 
 # ----- Main simulation loop (dt = 1 second) -----
 progress_interval = max(1, simulation_duration // 100)  # update every 1%
@@ -379,56 +433,30 @@ if max_productive_block_time is not None:
 else:
     print("Not enough block events to calculate maximum productive block time.")
 
-# ----- End-of-simulation extra reporting (only if not in debug mode) -----
-if not debug:
-    print("\nAdditional Simulation Details:")
+# ----- End-of-simulation extra reporting replaced by CSV output -----
+import pandas as pd
 
-    # 1. Print every time interval a node was offline.
-    print("\nOffline intervals per node:")
-    for validator in validators:
-        if validator.offline_intervals:
-            print(f"Validator {validator.id}:")
-            for (start, end) in validator.offline_intervals:
-                duration = end - start
-                print(f"  Offline from t={start} to t={end} (Duration {duration} seconds)")
-        else:
-            print(f"Validator {validator.id}: Always online.")
+# Assume simulation started at a given timestamp.
+simulation_start_timestamp = pd.Timestamp('2024-07-01 00:00:00')
 
-    # 2. Compute and print every time interval the network was NOT producing blocks.
-    downtime_intervals = []
-    previous_end = 0
-    for (u_start, u_end) in sorted(uptime_intervals):
-        if u_start > previous_end:
-            downtime_intervals.append((previous_end, u_start))
-        previous_end = u_end
-    if previous_end < simulation_duration:
-        downtime_intervals.append((previous_end, simulation_duration))
-    
-    print("\nNetwork downtime intervals (NOT producing blocks):")
-    if downtime_intervals:
-        for (start, end) in downtime_intervals:
-            duration = end - start
-            print(f"  Downtime from t={start} to t={end} (Duration {duration} seconds)")
-    else:
-        print("  None. The network produced blocks continuously.")
+# Create a list of rows for each validator's offline interval.
+rows = []
+for validator in validators:
+    for (start, end) in validator.offline_intervals:
+        data_inicial = simulation_start_timestamp + pd.to_timedelta(start, unit='s')
+        data_final = simulation_start_timestamp + pd.to_timedelta(end, unit='s')
+        rows.append({
+            'missingValidator': validator.id,
+            'Instituição': '',
+            'Data inicial': data_inicial.strftime('%d/%m/%Y %H:%M:%S'),
+            'Data final': data_final.strftime('%d/%m/%Y %H:%M:%S')
+        })
 
-    # ----- Generate a histogram for validator offline durations (10-min bins) -----
-    offline_durations = []
-    for validator in validators:
-        for (start, end) in validator.offline_intervals:
-            offline_durations.append(end - start)
-
-    if offline_durations:     
-        plt.figure(figsize=(10,6))
-        plt.hist(offline_durations, bins=50, edgecolor='black')
-        plt.xlabel("Duração Offline (segundos)")
-        plt.ylabel("Número de ocorrências")
-        plt.title("Distribuição dos períodos offline dos validadores")
-        plt.grid(True)
-        plt.tight_layout()
-        
-        plt.savefig("offline_histogram.png")
-        plt.close()
-        print("Offline histogram saved to 'offline_histogram.png'")
-    else:
-        print("\nNo offline intervals recorded for validators.")
+if rows:
+    output_df = pd.DataFrame(rows)
+    # Save the CSV using semicolon separator and Latin-1 encoding.
+    output_filename = "dados_sim.csv"
+    output_df.to_csv(output_filename, sep=';', index=False, encoding='latin-1')
+    print(f"CSV file generated: '{output_filename}'")
+else:
+    print("No offline intervals recorded for validators.")

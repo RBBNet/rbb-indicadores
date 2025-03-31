@@ -1,53 +1,49 @@
+import argparse
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Lista dos arquivos com os novos nomes
-files = [
-    './quedas-2024-07.xlsx',
-    './quedas-2024-08.xlsx',
-    './quedas-2024-09.xlsx',
-    './quedas-2024-10.xlsx',
-    './quedas-2024-11.xlsx',
-    './quedas-2024-12.xlsx',
-    './quedas-2025-01.xlsx'
-]
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="Generate histograms from downtime CSV data")
+parser.add_argument("--file", required=True, help="CSV file with downtime data (e.g., quedas_totais.csv)")
+parser.add_argument("--ymdate", type=float, default=None, help="Maximum Y value for Data Inicial histogram")
+parser.add_argument("--ymdowntimeshort", type=float, default=None, help="Maximum Y value for short downtime histogram")
+parser.add_argument("--ymdowntime", type=float, default=None, help="Maximum Y value for long downtime histogram")
+args = parser.parse_args()
 
-dfs = []
-for file in files:
-    try:
-        df = pd.read_excel(file)
-        dfs.append(df)
-    except Exception as e:
-        print(f"Erro ao ler o arquivo {file}: {e}")
+# Derive the base filename (without path and extension)
+base_name = os.path.splitext(os.path.basename(args.file))[0]
 
-# Concatena os dados em um único DataFrame
-data = pd.concat(dfs, ignore_index=True)
+# Read the CSV file (fields separated by ;)
+data = pd.read_csv(args.file, sep=';', encoding='latin-1')
 print("Total de registros (antes da conversão):", len(data))
 
-# Converte as colunas "Data inicial" e "Data final" para datetime (formato ISO)
-data['Data inicial'] = pd.to_datetime(data['Data inicial'], errors='coerce')
-data['Data final'] = pd.to_datetime(data['Data final'], errors='coerce')
-data = data.dropna(subset=['Data inicial', 'Data final'])
+# Convert the date fields (expecting format: DD/MM/YYYY HH:MM:SS)
+data['Data Inicial'] = pd.to_datetime(data['Data inicial'], errors='coerce', format='%d/%m/%Y %H:%M:%S')
+data['Data final']   = pd.to_datetime(data['Data final'], errors='coerce', format='%d/%m/%Y %H:%M:%S')
+data = data.dropna(subset=['Data Inicial', 'Data final'])
 print("Total de registros (após a conversão):", len(data))
 
-# Gera o histograma dos horários de início dos eventos
+# Generate histogram of "Data Inicial" events
 plt.figure(figsize=(10,6))
-plt.hist(data['Data inicial'], bins=50, edgecolor='black')
-plt.xlabel('Data inicial')
+plt.hist(data['Data Inicial'], bins=50, edgecolor='black')
+plt.xlabel('Data Inicial')
 plt.ylabel('Número de eventos')
 plt.title('Distribuição dos inícios dos downtimes (formato ISO)')
 plt.grid(True)
+if args.ymdate is not None:
+    plt.ylim(0, args.ymdate)
+plt.tight_layout()
 
-# Salva o histograma em um arquivo, similar a simulacao2.py
-plt.savefig('histograma_datas_iniciais_real.png')
+hist_dates_filename = f"{base_name}_hist_dates.png"
+plt.savefig(hist_dates_filename)
 plt.close()
+print(f"Histograma salvo em '{hist_dates_filename}'")
 
-print("Histograma salvo em 'histograma_datas_iniciais_real.png'")
+# Calculate total downtime in seconds from the differences between "Data final" and "Data Inicial"
+data['Downtime_total'] = (data['Data final'] - data['Data Inicial']).dt.total_seconds()
 
-# Calcula o tempo total de downtime (em segundos) a partir dos campos "Data inicial" e "Data final"
-data['Downtime_total'] = (data['Data final'] - data['Data inicial']).dt.total_seconds()
-
-# Gera o histograma dos tempos de downtime
+# Generate histogram of total downtime durations (all downtimes)
 plt.figure(figsize=(10,6))
 plt.hist(data['Downtime_total'], bins=50, edgecolor='black')
 plt.xlabel('Downtime (segundos)')
@@ -56,25 +52,36 @@ plt.title('Distribuição dos tempos de downtime (total)')
 plt.grid(True)
 plt.tight_layout()
 
-# Salva o histograma em um arquivo chamado "histograma_downtime_real_total.png"
-plt.savefig('histograma_downtime_real_total.png')
+hist_total_filename = f"{base_name}_hist_downtime_total.png"
+plt.savefig(hist_total_filename)
 plt.close()
-
-print("Histograma salvo em 'histograma_downtime_real_total.png'")
-
-# Filtra os downtime com duração menor ou igual a 1000 segundos
+print(f"Histograma salvo em '{hist_total_filename}'")
+# Generate histogram for short downtimes (≤ 1000 seconds)
 short_downtime = data[data['Downtime_total'] <= 1000]
-
-# Gera o histograma dos tempos de downtime (até 1000 segundos)
 plt.figure(figsize=(10,6))
-plt.hist(short_downtime['Downtime_total'], bins=50, edgecolor='black')
+plt.hist(short_downtime['Downtime_total'], bins=50, range=(0,1000), edgecolor='black')
 plt.xlabel('Downtime (segundos)')
 plt.ylabel('Número de eventos')
-plt.title('Distribuição dos tempos de downtime (até 5000 seg)')
+plt.title('Distribuição dos tempos de downtime (até 1000 seg)')
 plt.grid(True)
+if args.ymdowntimeshort is not None:
+    plt.ylim(0, args.ymdowntimeshort)
 plt.tight_layout()
 
-plt.savefig('histograma_downtime_real_short.png')
+hist_short_filename = f"{base_name}_hist_downtime_short.png"
+plt.savefig(hist_short_filename)
 plt.close()
+print(f"Histograma salvo em '{hist_short_filename}'")
 
-print("Histograma salvo em 'histograma_downtime_real_short.png'")
+# Generate histogram for long downtimes (> 1000 seconds)
+long_downtime = data[data['Downtime_total'] > 1000]
+plt.figure(figsize=(10,6))
+plt.hist(long_downtime['Downtime_total'], bins=50, range=(0,350000), edgecolor='black')
+if args.ymdowntime is not None:
+    plt.ylim(0, args.ymdowntime)
+plt.tight_layout()
+
+hist_long_filename = f"{base_name}_hist_downtime_long.png"
+plt.savefig(hist_long_filename)
+plt.close()
+print(f"Histograma salvo em '{hist_long_filename}'")
