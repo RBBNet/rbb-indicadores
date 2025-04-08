@@ -80,6 +80,9 @@ async function listIssues() {
         console.log('\n' + '-'.repeat(50));
         console.log('ISSUES EM ABERTO');
         if (allOpenIssues.length > 0) {
+            allOpenIssues.forEach(issue => {
+                fileData += `\n${issue.number};${issue.title};${issue.labels};${issue.assignees};${issue.daysOpen};${issue.state}`;
+            });
             console.table(allOpenIssues);
         }
         console.log(`Total de issues em aberto: ${allOpenIssues.length}`);
