@@ -37,23 +37,33 @@ async function listIssues() {
             * If needed, remove/add parameters in this map
             * except for 'owner', 'repo' and 'headers'  
             */
-            const params = {
+            const paramsClosed = {
                 owner: 'RBBNet',
                 repo: 'incidentes',
-                state: 'all',
+                state: 'closed',
                 labels: `${label},PRD`,
                 since: date_first.toISOString(),
                 headers: {
                     'X-GitHub-Api-Version': '2022-11-28'
                 }
             };
-
-            const allIssues = await functions.fetchIssues(params);
-            allOpenIssues = allOpenIssues.concat(allIssues.filter(issue => issue.state === 'open'));
-            const closedIssues = allIssues.filter(issue => {
+            let closedIssues = await functions.fetchIssues(paramsClosed);
+            closedIssues = closedIssues.filter(issue => {
                 const updateDate = new Date(issue.updated_at);
-                return (issue.state === 'closed' && updateDate.valueOf() <= date_last.valueOf());
+                return updateDate.valueOf() <= date_last.valueOf();
             });
+            
+            const paramsOpen = {
+                owner: 'RBBNet',
+                repo: 'incidentes',
+                state: 'open',
+                labels: `${label},PRD`,
+                headers: {
+                    'X-GitHub-Api-Version': '2022-11-28'
+                }
+            };
+            const openIssues = await functions.fetchIssues(paramsOpen);
+            allOpenIssues = allOpenIssues.concat(openIssues);
         
             console.log('\n' + '-'.repeat(50));
             console.log(`ISSUES FOR ${label} + PRD`);
