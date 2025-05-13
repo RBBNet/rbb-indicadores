@@ -98,6 +98,13 @@ async function analyzeValidatorDowntime(filePath, outputPath) {
       const cycleValidators = getValidators(cycle[0].extra_data);
       if (!cycleValidators) continue;
 
+      cycleValidators.forEach(v => {
+        if (!downtimeTotals[v]) {
+          downtimeTotals[v] = { total: 0, eventos: 0 };
+          validatorState[v] = 'online';
+        }
+      });
+
       const presentCount = cycleValidators.filter(v =>
         cycle.some(b => b.miner === v)
       ).length;
@@ -177,6 +184,11 @@ async function analyzeValidatorDowntime(filePath, outputPath) {
       });
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(quedaContinua), 'Queda Contínua');
+    wb.SheetNames = [
+        'Queda Contínua',
+        'Downtime Detalhado',
+        'Downtime Total'
+    ];
 
     XLSX.writeFile(wb, outputPath);
     console.log(`Relatório gerado: ${outputPath}`);
