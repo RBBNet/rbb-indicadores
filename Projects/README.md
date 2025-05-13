@@ -22,7 +22,7 @@ Para utilizar essa ferramenta é necessário:
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 
 ```bash
-node Project\project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>
+node Projects\project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>
 ```
 
 Onde:

@@ -2,6 +2,7 @@ import functions from './issue-functions.js';
 import fs from 'fs';
 import path from 'path';
 import { exit } from 'process';
+import { addDays } from 'date-fns';
 let labels = ['incidente','incidente-critico', 'vulnerabilidade','vulnerabilidade-critica'];
 
 async function listIssues() {
@@ -27,6 +28,8 @@ async function listIssues() {
             console.log("Por favor, insira uma data válida. O formato esperado é DD/MM/AAAA");
             exit(1);
         } 
+        // Adiciona 1 dia à data final, para equivaler a <data_final> 24:00:00 -> Intervalo aberto no final do período
+        date_last = addDays(date_last, 1);
         
         let fileData = 'number;title;labels;assignees;daysOpen;state';
         let allOpenIssues = [];
@@ -50,7 +53,7 @@ async function listIssues() {
             let closedIssues = await functions.fetchIssues(paramsClosed);
             closedIssues = closedIssues.filter(issue => {
                 const updateDate = new Date(issue.updated_at);
-                return updateDate.valueOf() <= date_last.valueOf();
+                return updateDate.valueOf() < date_last.valueOf();
             });
             
             const paramsOpen = {
