@@ -97,7 +97,7 @@ async function analyzeValidatorDowntime(filePath, outputPath) {
       const cycleStartTimestamp = Number(cycle[0].timestamp);
       const cycleEndTimestamp = Number(cycle[cycle.length - 1].timestamp);
       const realCycleDuration = cycleEndTimestamp - cycleStartTimestamp;
-      const cycleValidators = getValidators(cycle[0].extra_data) || validators;
+      const cycleValidators = validators;
 
       for (const expectedValidator of cycleValidators) {
         const presente = cycle.some(b => b.miner === expectedValidator);
