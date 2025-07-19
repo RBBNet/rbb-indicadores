@@ -24,7 +24,7 @@ def main():
             # executa a simulação
             outfile = output_dir / f"intervals_v{nv}_m{mi}.csv"
             subprocess.run(
-                ["python", "simulacao5.py", str(outfile)],
+                ["python", "simulacao6.py", str(outfile)],
                 check=True
             )
 
