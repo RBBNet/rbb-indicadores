@@ -173,7 +173,8 @@ def adjust_quorum_met(validators):
 def failing_validator_good_to_exclude(t, v, validators):
     return v.state == "failing" and v.included  # demais checks haviam sido comentados
 
-
+# Nem sempre vale a pena excluir temporariamente do consenso validadores que estão falhando 
+# Para 4 ou menos validadores, também nunca vale a pena. Acima disso, apenas quando N mod 3 != 1. 
 def calc_should_exclude_validators(validators, t):
     n_inc = sum(1 for v in validators if v.included)
     if n_inc <= 4:
@@ -255,12 +256,7 @@ def run_simulation(sim_id, block_out_f):
             v = validators[vid]
             if v.state != "online":
                 continue  # ignore outdated event
-            v.state = "failing"
-            v.offline_start = t
-            mean_off = mean_short_offline_time if ftype == "short" else mean_long_offline_time
-            offline_dur = random.expovariate(1 / mean_off)
-            v.offline_timer = offline_dur
-            pause(f"Validator {vid} failing ({ftype.upper()})", t)
+            offline_dur = exec_validator_fail(v, t, vid, ftype)
             # agenda recuperação
             schedule(events, int(t + offline_dur), "validator_recover", vid)
 
@@ -269,11 +265,7 @@ def run_simulation(sim_id, block_out_f):
             v = validators[vid]
             if v.state != "failing":
                 continue
-            v.state = "online"
-            if v.offline_start is not None:
-                v.offline_intervals.append((v.offline_start, t))
-                v.offline_start = None
-            pause(f"Validator {vid} recovered", t)
+            exec_validator_recovery(v, t, vid)
             schedule_next_fail(v, t)
 
         elif etype == "block_attempt":
@@ -283,67 +275,15 @@ def run_simulation(sim_id, block_out_f):
             if not included:
                 pause("No validators included, stopping simulation", t)
                 break
-            included.sort(key=lambda v: v.id)
-            proposer = included[proposer_index % len(included)]
-            if consensus_quorum_met(validators) and proposer.state == "online":
-                # record block
-                block_timestamps.append(t)
-                block_out_f.write(f"{sim_id};{t};{proposer.id}\n")
-                proposer.last_proposal_time = t
-                proposals_count[proposer.id] += 1
-                consecutive_failure_count = 0
-                next_block_time = t + block_time
-            else:
-                consecutive_failure_count += 1
-                penalty = (2 ** (consecutive_failure_count - 1)) * request_timeout
-                next_block_time = t + penalty
-                pause(
-                    f"[Sim {sim_id}] No block produced (consecutive failures: {consecutive_failure_count})",
-                    t,
-                )
-            proposer_index = (proposer_index + 1) % len(included)
+            consecutive_failure_count, next_block_time = exec_block_attempt(sim_id, block_out_f, validators, block_timestamps, proposals_count, proposer_index, t, included)
             schedule(events, int(next_block_time), "block_attempt", None)
 
         elif etype == "meeting_reset":
-            pause(f"[Sim {sim_id}] Reuniao de RESET", t)
-            if network_stopped_producing_blocks(validators, consecutive_failure_count):
-                calculate_operators_presence(validators, t)
-                if reset_quorum_met(validators, t):
-                    pause(f"[Sim {sim_id}] Resetando produção de blocos", t)
-                    consecutive_failure_count = 0
-                    next_block_time = t + block_time
-                    schedule(events, int(next_block_time), "block_attempt", None)
-                else:
-                    pause(f"[Sim {sim_id}] Não foi possível resetar produção de blocos", t)
-            else:
-                pause(f"[Sim {sim_id}] Produção de blocos parece normal. Não é necessário resetar", t)
+            consecutive_failure_count = exec_reset_meeting(sim_id, validators, consecutive_failure_count, events, t)
             schedule(events, t + day_seconds, "meeting_reset", None)
 
         elif etype == "meeting_adjust":
-            pause(f"[Sim {sim_id}] Reuniao de AJUSTE", t)
-            calculate_operators_presence(validators, t)
-            if not network_stopped_producing_blocks(validators, consecutive_failure_count) and adjust_quorum_met(validators):
-                should_exclude = calc_should_exclude_validators(validators, t)
-                to_exclude, to_include = [], []
-                for v in validators:
-                    if should_exclude and failing_validator_good_to_exclude(t, v, validators):
-                        to_exclude.append(v)
-                    if not v.included and v.state == "online":
-                        to_include.append(v)
-                if to_exclude or to_include:
-                    for v in to_exclude:
-                        v.included = False
-                        pause(f"[Sim {sim_id}] Excluindo validador {v.id}", t)
-                    for v in to_include:
-                        v.included = True
-                        pause(f"[Sim {sim_id}] Incluindo validador {v.id}", t)
-                else:
-                    pause(f"[Sim {sim_id}] Houve quorum, mas não houve alteração de validadores", t)
-            else:
-                if network_stopped_producing_blocks(validators, consecutive_failure_count):
-                    pause(f"[Sim {sim_id}] Não houve ajuste de validadores. A rede está parada", t)
-                else:
-                    pause(f"[Sim {sim_id}] Não houve ajuste de validadores. Falta quorum", t)
+            exec_adjust_meeting(sim_id, validators, consecutive_failure_count, t)
             schedule(events, t + meeting_interval_seconds, "meeting_adjust", None)
 
     # ---------------------------------------------------------------------
@@ -377,6 +317,89 @@ def run_simulation(sim_id, block_out_f):
     }
     proposals_summary["total_blocks"] = total_blocks
     return interval_counts, proposals_summary
+
+def exec_validator_fail(v, t, vid, ftype):
+    v.state = "failing"
+    v.offline_start = t
+    mean_off = mean_short_offline_time if ftype == "short" else mean_long_offline_time
+    offline_dur = random.expovariate(1 / mean_off)
+    v.offline_timer = offline_dur
+    pause(f"Validator {vid} failing ({ftype.upper()})", t)
+    return offline_dur
+
+def exec_validator_recovery(v, t, vid):
+    v.state = "online"
+    if v.offline_start is not None:
+        v.offline_intervals.append((v.offline_start, t))
+        v.offline_start = None
+    pause(f"Validator {vid} recovered", t)
+
+def exec_block_attempt(sim_id, block_out_f, validators, block_timestamps, proposals_count, proposer_index, t, included):
+    included.sort(key=lambda v: v.id)
+    proposer = included[proposer_index % len(included)]
+    if consensus_quorum_met(validators) and proposer.state == "online":
+                # record block
+        block_timestamps.append(t)
+        block_out_f.write(f"{sim_id};{t};{proposer.id}\n")
+        proposer.last_proposal_time = t
+        proposals_count[proposer.id] += 1
+        consecutive_failure_count = 0
+        next_block_time = t + block_time
+    else:
+        consecutive_failure_count += 1
+        penalty = (2 ** (consecutive_failure_count - 1)) * request_timeout
+        next_block_time = t + penalty
+        pause(
+                    f"[Sim {sim_id}] No block produced (consecutive failures: {consecutive_failure_count})",
+                    t,
+                )
+    proposer_index = (proposer_index + 1) % len(included)
+    return consecutive_failure_count,next_block_time
+
+# Reunião de reset, que dá um reset na rede no caso de ela ter parado de produzir bloco por 
+# conta de falta de quórum para consenso
+def exec_reset_meeting(sim_id, validators, consecutive_failure_count, events, t):
+    pause(f"[Sim {sim_id}] Reuniao de RESET", t)
+    if network_stopped_producing_blocks(validators, consecutive_failure_count):
+        calculate_operators_presence(validators, t)
+        if reset_quorum_met(validators, t):
+            pause(f"[Sim {sim_id}] Resetando produção de blocos", t)
+            consecutive_failure_count = 0
+            next_block_time = t + block_time
+            schedule(events, int(next_block_time), "block_attempt", None)
+        else:
+            pause(f"[Sim {sim_id}] Não foi possível resetar produção de blocos", t)
+    else:
+        pause(f"[Sim {sim_id}] Produção de blocos parece normal. Não é necessário resetar", t)
+    return consecutive_failure_count
+
+# Reunião de ajuste, para excluir temporariamente validadores do consenso no caso de estarem falhando
+# ou incluir validadores que já estão operando e que foram excluídos anteriormente
+def exec_adjust_meeting(sim_id, validators, consecutive_failure_count, t):
+    pause(f"[Sim {sim_id}] Reuniao de AJUSTE", t)
+    calculate_operators_presence(validators, t)
+    if not network_stopped_producing_blocks(validators, consecutive_failure_count) and adjust_quorum_met(validators):
+        should_exclude = calc_should_exclude_validators(validators, t)
+        to_exclude, to_include = [], []
+        for v in validators:
+            if should_exclude and failing_validator_good_to_exclude(t, v, validators):
+                to_exclude.append(v)
+            if not v.included and v.state == "online":
+                to_include.append(v)
+        if to_exclude or to_include:
+            for v in to_exclude:
+                v.included = False
+                pause(f"[Sim {sim_id}] Excluindo validador {v.id}", t)
+            for v in to_include:
+                v.included = True
+                pause(f"[Sim {sim_id}] Incluindo validador {v.id}", t)
+        else:
+            pause(f"[Sim {sim_id}] Houve quorum, mas não houve alteração de validadores", t)
+    else:
+        if network_stopped_producing_blocks(validators, consecutive_failure_count):
+            pause(f"[Sim {sim_id}] Não houve ajuste de validadores. A rede está parada", t)
+        else:
+            pause(f"[Sim {sim_id}] Não houve ajuste de validadores. Falta quorum", t)
 
 # ---------------------------------------------------------------------------
 # EXECUÇÃO DAS SIMULAÇÕES (igual ao script anterior)
