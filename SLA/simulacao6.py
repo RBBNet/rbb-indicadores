@@ -35,16 +35,21 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("outfile", type=str, help="Name of the output CSV file")
 parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+parser.add_argument("--no-blocks", action="store_true", help="Do not generate per-block CSV")
 args = parser.parse_args()
 
 output_filename = args.outfile
 debug_mode = args.debug
+no_blocks = args.no_blocks
 
-# derive and open the new blocks CSV for streaming
+# derive and open the new blocks CSV for streaming only if not disabled
 base, ext = os.path.splitext(output_filename)
 block_output_filename = f"{base}_blocks.csv"
-block_out_f = open(block_output_filename, 'w', encoding='latin-1', newline='')
-block_out_f.write("sim_id;timestamp;proposer_validator\n")
+if not no_blocks:
+    block_out_f = open(block_output_filename, 'w', encoding='latin-1', newline='')
+    block_out_f.write("sim_id;timestamp;proposer_validator\n")
+else:
+    block_out_f = None
 
 # ---------------------------------------------------------------------------
 # Config
@@ -275,7 +280,7 @@ def run_simulation(sim_id, block_out_f):
             if not included:
                 pause("No validators included, stopping simulation", t)
                 break
-            consecutive_failure_count, next_block_time = exec_block_attempt(sim_id, block_out_f, validators, block_timestamps, proposals_count, proposer_index, t, included)
+            consecutive_failure_count, next_block_time = exec_block_attempt(sim_id, block_out_f, validators, block_timestamps, proposals_count, proposer_index, t, included, consecutive_failure_count)
             schedule(events, int(next_block_time), "block_attempt", None)
 
         elif etype == "meeting_reset":
@@ -334,13 +339,14 @@ def exec_validator_recovery(v, t, vid):
         v.offline_start = None
     pause(f"Validator {vid} recovered", t)
 
-def exec_block_attempt(sim_id, block_out_f, validators, block_timestamps, proposals_count, proposer_index, t, included):
+def exec_block_attempt(sim_id, block_out_f, validators, block_timestamps, proposals_count, proposer_index, t, included, consecutive_failure_count):
     included.sort(key=lambda v: v.id)
     proposer = included[proposer_index % len(included)]
     if consensus_quorum_met(validators) and proposer.state == "online":
                 # record block
         block_timestamps.append(t)
-        block_out_f.write(f"{sim_id};{t};{proposer.id}\n")
+        if block_out_f is not None:
+            block_out_f.write(f"{sim_id};{t};{proposer.id}\n")
         proposer.last_proposal_time = t
         proposals_count[proposer.id] += 1
         consecutive_failure_count = 0
@@ -482,7 +488,9 @@ with open(output_filename, 'a', encoding='latin-1') as f:
     f.write(f"intervalos >= 120 minutos;{count_120}\n")
 
 # close the blocks file when done
-block_out_f.close()
+if block_out_f is not None:
+    block_out_f.close()
 
 print(f"\nAggregated block intervals CSV generated: '{output_filename}'")
-print(f"Per-block CSV generated: '{block_output_filename}'")
+if not no_blocks:
+    print(f"Per-block CSV generated: '{block_output_filename}'")
