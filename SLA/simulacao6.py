@@ -1,17 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Event‑driven re‑implementation of the RBB validator‑failure simulation.
-
-Principais diferenças em relação ao protótipo por‑segundo:
-• Elimina o loop de 0 → simulation_duration step 1 s; só processa quando
-  um evento relevante ocorre (falha, recuperação, tentativa de bloco ou reunião).
-• Mantém TODA a lógica original (quóruns, resets, ajustes, penalidades
-  exponenciais, exclusão/entrada de validadores etc.).
-• Interface de linha de comando, arquivo CSV de saída e formato de resumo
-  permanecem idênticos, portanto nenhuma ferramenta downstream precisa mudar.
-
-O ganho típico de desempenho varia de 20× a 200×, dependendo dos parâmetros.
-"""
 
 import matplotlib
 matplotlib.use("Agg")  # compatibilidade; não gera gráficos por padrão
@@ -35,16 +22,20 @@ parser = argparse.ArgumentParser(
 )
 parser.add_argument("outfile", type=str, help="Name of the output CSV file")
 parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+parser.add_argument("--no-blocks", action="store_true", help="Do not generate per-block CSV")
 args = parser.parse_args()
 
 output_filename = args.outfile
 debug_mode = args.debug
+no_blocks = args.no_blocks
 
 # derive and open the new blocks CSV for streaming
 base, ext = os.path.splitext(output_filename)
 block_output_filename = f"{base}_blocks.csv"
-block_out_f = open(block_output_filename, 'w', encoding='latin-1', newline='')
-block_out_f.write("sim_id;timestamp;proposer_validator\n")
+block_out_f = None
+if not no_blocks:
+    block_out_f = open(block_output_filename, 'w', encoding='latin-1', newline='')
+    block_out_f.write("sim_id;timestamp;proposer_validator\n")
 
 # ---------------------------------------------------------------------------
 # Config
@@ -60,13 +51,19 @@ else:
 dt = 1  # não é mais usado para o loop, mas mantido em funções auxiliares
 simulation_duration = int(config.get("simulation_duration_days", 3)) * 86400
 num_validators = int(config.get("num_validators", 10))
-meeting_interval_in_hours = float(config.get("meeting_interval_in_hours", 5))
-block_time = float(config.get("block_time", 5))
-request_timeout = float(config.get("request_timeout", 2))
+block_time = int(config.get("block_time", 5))
+request_timeout = int(config.get("request_timeout", 2))
 consensus_quorum_fraction = 2 / 3
 
-meeting_time_offset = 11 * 3600  # não usado explicitamente, mantido para compat.
-p_operator_absence = float(config.get("p_operator_absence", 0.1))
+reset_meeting_interval_in_hours = float(config.get("reset_meeting_interval_in_hours", 0))
+reset_meeting_p_operator_absence = float(config.get("reset_meeting_p_operator_absence", 0.1))
+
+adjust_procedure_interval_in_blocks = int(
+    config.get("adjust_procedure_interval_in_blocks", 420)
+)
+adjust_procedure_call_failure_probability = float(
+    config.get("adjust_procedure_call_failure_probability", 0.5)
+)
 
 T_fails_short = float(config.get("T_fails_short_days", 1)) * 24 * 60 * 60
 T_fails_long = float(config.get("T_fails_long_days", 10)) * 24 * 60 * 60
@@ -93,7 +90,7 @@ def format_time(t: int) -> str:
     return f"day {days:02d} | {hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def pause(msg: str, t: int):
+def debug(msg: str, t: int):
     if not debug_mode:
         return
     print(f"[{format_time(t)}] {msg}")
@@ -102,7 +99,7 @@ def pause(msg: str, t: int):
 # Classe do validador (inalterada em termos de campos)
 # ---------------------------------------------------------------------------
 class Validator:
-    def __init__(self, vid: int, operator_reliability=1 - p_operator_absence):
+    def __init__(self, vid: int, operator_reliability=1 - reset_meeting_p_operator_absence):
         self.id = vid
         self.state = "online"  # "online" / "failing"
         self.included = True
@@ -112,6 +109,7 @@ class Validator:
         self.offline_intervals = []
         self.offline_start = None
         self.last_proposal_time = None
+        self.proposed_blocks_in_adjust_period = False
 
 # ---------------------------------------------------------------------------
 # Funções de quórum e lógica de rede (copiadas do código original sem mudanças)
@@ -136,13 +134,13 @@ def consensus_quorum_met(validators):
     return active / len(included) > consensus_quorum_fraction
 
 
-def network_stopped_producing_blocks(validators, consecutive_failures):
+def network_stopped_producing_blocks(validators, consecutive_failures, t):
     included = [v for v in validators if v.included]
     total = len(included)
     if total == 0:
         return True
     if consecutive_failures >= total / 3:
-        pause("Rede parece parada, pois há falhas consecutivas >= 1/3 dos validadores", 0)
+        debug("Rede parece parada, pois há falhas consecutivas >= 1/3 dos validadores", t)
         return True
     return False
 
@@ -151,11 +149,11 @@ def reset_quorum_met(validators, t):
     included = [v for v in validators if v.included]
     total = len(included)
     count = sum(1 for v in included if v.state == "online" and v.operator_present)
-    pause(f"Incluídos + online + presentes: {count} de {total}", t)
+    debug(f"Incluídos + online + presentes: {count} de {total}", t)
     if total == 0 or (count / total) <= (2/3):
-        pause("Não há quorum para reunião de RESET", t)
+        debug("Não há quorum para reunião de RESET", t)
         for v in included:
-            pause(f"Validador {v.id}: state={v.state}, operator_present={v.operator_present}", t)
+            debug(f"Validador {v.id}: state={v.state}, operator_present={v.operator_present}", t)
     return total > 0 and (count / total) > (2/3)
 
 
@@ -165,7 +163,7 @@ def adjust_quorum_met(validators):
     count = sum(1 for v in included if v.state == "online" and v.operator_present)
     ok = total > 0 and (count / total) > 0.5
     if not ok:
-        pause(f"Não há reunião de ajuste porque não há quorum; presentes={count}/{total}", 0)
+        debug(f"Não há reunião de ajuste porque não há quorum; presentes={count}/{total}", 0)
     return ok
 
 # Excluir/ajustar validadores (mesma lógica)
@@ -182,8 +180,38 @@ def calc_should_exclude_validators(validators, t):
     n_failing = sum(1 for v in validators if v.included and v.state == "failing")
     if n_failing >= min_fail:
         return True
-    pause(f"Com {n_failing} falhando e {n_inc} incluídos, não é necessário excluir validadores", t)
+    debug(f"Com {n_failing} falhando e {n_inc} incluídos, não é necessário excluir validadores", t)
     return False
+
+def proposer_register_failed(validators, failure_probability):
+    # Para falhar, todos os validadores incluídos e online têm que falhar
+    return all(random.random() < failure_probability for v in validators if v.included and v.state == "online")
+
+def adjust_procedure(validators, t): 
+    debug(f"[Sim {sim_id}] *** Executando procedimento de ajuste ***", t)
+    n_validadores_incluidos = sum(1 for v in validators if v.included) 
+    change = False
+    for v in validators:
+        # Se validador está incluído e não propôs bloco no período, exclui, mas só se houver mais que 4 incluídos
+        if v.included and not v.proposed_blocks_in_adjust_period:
+            if n_validadores_incluidos > 4:
+                v.included = False
+                change = True
+                debug(f"Validador {v.id} foi excluído por não propor bloco no período de ajuste", t)
+            else:
+                debug(f"Validador {v.id} não propôs bloco no período de ajuste, mas não foi excluído, pois há apenas {n_validadores_incluidos} incluídos", t)
+        # Se um validador que não está incluído está online, inclui
+        elif not v.included and v.state == "online":
+            change = True
+            v.included = True
+            debug(f"Validador {v.id} foi incluído por estar online", t)
+
+    if not change:
+        debug(f"[Sim {sim_id}] Nenhuma mudança nos validadores durante o ajuste", t)
+
+    # Reset das flags para o próximo período
+    for v in validators:
+        v.proposed_blocks_in_adjust_period = False
 
 # ---------------------------------------------------------------------------
 # Eventos
@@ -226,11 +254,11 @@ def run_simulation(sim_id, block_out_f):
     for v in validators:
         schedule_next_fail(v, 0)
 
-    # Inicializa reuniões
-    day_seconds = 86400
-    meeting_interval_seconds = int(meeting_interval_in_hours * 3600)
-    schedule(events, day_seconds, "meeting_reset", None)
-    schedule(events, meeting_interval_seconds, "meeting_adjust", None)
+    if reset_meeting_interval_in_hours != 0:
+        reset_meeting_interval_seconds = int(reset_meeting_interval_in_hours * 3600)
+        schedule(events, reset_meeting_interval_seconds, "meeting_reset", None)
+
+    # schedule(events, reset_meeting_interval_seconds, "meeting_adjust", None)
 
     # Progresso
     progress_step = max(1, simulation_duration // 100)
@@ -238,6 +266,8 @@ def run_simulation(sim_id, block_out_f):
 
     # Primeiro bloco
     schedule(events, next_block_time, "block_attempt", None)
+    # Inicializa contador de blocos para o procedimento de ajuste
+    adjust_procedure_blocks_count = 0
 
     # Loop principal ---------------------------------------------------------
     while events:
@@ -260,7 +290,7 @@ def run_simulation(sim_id, block_out_f):
             mean_off = mean_short_offline_time if ftype == "short" else mean_long_offline_time
             offline_dur = random.expovariate(1 / mean_off)
             v.offline_timer = offline_dur
-            pause(f"Validator {vid} failing ({ftype.upper()})", t)
+            debug(f"Validator {vid} failing ({ftype.upper()})", t)
             # agenda recuperação
             schedule(events, int(t + offline_dur), "validator_recover", vid)
 
@@ -273,7 +303,7 @@ def run_simulation(sim_id, block_out_f):
             if v.offline_start is not None:
                 v.offline_intervals.append((v.offline_start, t))
                 v.offline_start = None
-            pause(f"Validator {vid} recovered", t)
+            debug(f"Validator {vid} recovered", t)
             schedule_next_fail(v, t)
 
         elif etype == "block_attempt":
@@ -281,23 +311,36 @@ def run_simulation(sim_id, block_out_f):
                 continue
             included = [v for v in validators if v.included]
             if not included:
-                pause("No validators included, stopping simulation", t)
+                debug("No validators included, stopping simulation", t)
                 break
             included.sort(key=lambda v: v.id)
             proposer = included[proposer_index % len(included)]
             if consensus_quorum_met(validators) and proposer.state == "online":
                 # record block
                 block_timestamps.append(t)
-                block_out_f.write(f"{sim_id};{t};{proposer.id}\n")
+                if not no_blocks:
+                    block_out_f.write(f"{sim_id};{t};{proposer.id}\n")
+                debug(f"[Sim {sim_id}] Bloco proposto por {proposer.id}", t)
                 proposer.last_proposal_time = t
                 proposals_count[proposer.id] += 1
                 consecutive_failure_count = 0
                 next_block_time = t + block_time
+
+                # Registra que validador fez uma proposta no período de ajuste
+                if not proposer_register_failed(validators, adjust_procedure_call_failure_probability):
+                    proposer.proposed_blocks_in_adjust_period = True
+                    adjust_procedure_blocks_count += 1
+                    debug(f"[Sim {sim_id}] Bloco numero {adjust_procedure_blocks_count} no periodo de ajuste", t)
+                    if adjust_procedure_interval_in_blocks > 0 and adjust_procedure_blocks_count >= adjust_procedure_interval_in_blocks:
+                        adjust_procedure(validators, t)
+                        adjust_procedure_blocks_count = 0  # zera apenas quando roda o ajuste
+                else:
+                    debug(f"[Sim {sim_id}] Bloco sem transacao para registro de bloco proposto por proponente", t)
             else:
                 consecutive_failure_count += 1
                 penalty = (2 ** (consecutive_failure_count - 1)) * request_timeout
                 next_block_time = t + penalty
-                pause(
+                debug(
                     f"[Sim {sim_id}] No block produced (consecutive failures: {consecutive_failure_count})",
                     t,
                 )
@@ -305,24 +348,24 @@ def run_simulation(sim_id, block_out_f):
             schedule(events, int(next_block_time), "block_attempt", None)
 
         elif etype == "meeting_reset":
-            pause(f"[Sim {sim_id}] Reuniao de RESET", t)
-            if network_stopped_producing_blocks(validators, consecutive_failure_count):
+            debug(f"[Sim {sim_id}] Reuniao de RESET", t)
+            if network_stopped_producing_blocks(validators, consecutive_failure_count, t):
                 calculate_operators_presence(validators, t)
                 if reset_quorum_met(validators, t):
-                    pause(f"[Sim {sim_id}] Resetando produção de blocos", t)
+                    debug(f"[Sim {sim_id}] Resetando produção de blocos", t)
                     consecutive_failure_count = 0
                     next_block_time = t + block_time
                     schedule(events, int(next_block_time), "block_attempt", None)
                 else:
-                    pause(f"[Sim {sim_id}] Não foi possível resetar produção de blocos", t)
+                    debug(f"[Sim {sim_id}] Não foi possível resetar produção de blocos", t)
             else:
-                pause(f"[Sim {sim_id}] Produção de blocos parece normal. Não é necessário resetar", t)
-            schedule(events, t + day_seconds, "meeting_reset", None)
+                debug(f"[Sim {sim_id}] Produção de blocos parece normal. Não é necessário resetar", t)
+            schedule(events, t + reset_meeting_interval_seconds, "meeting_reset", None)
 
         elif etype == "meeting_adjust":
-            pause(f"[Sim {sim_id}] Reuniao de AJUSTE", t)
+            debug(f"[Sim {sim_id}] Reuniao de AJUSTE", t)
             calculate_operators_presence(validators, t)
-            if not network_stopped_producing_blocks(validators, consecutive_failure_count) and adjust_quorum_met(validators):
+            if not network_stopped_producing_blocks(validators, consecutive_failure_count, t) and adjust_quorum_met(validators):
                 should_exclude = calc_should_exclude_validators(validators, t)
                 to_exclude, to_include = [], []
                 for v in validators:
@@ -333,18 +376,18 @@ def run_simulation(sim_id, block_out_f):
                 if to_exclude or to_include:
                     for v in to_exclude:
                         v.included = False
-                        pause(f"[Sim {sim_id}] Excluindo validador {v.id}", t)
+                        debug(f"[Sim {sim_id}] Excluindo validador {v.id}", t)
                     for v in to_include:
                         v.included = True
-                        pause(f"[Sim {sim_id}] Incluindo validador {v.id}", t)
+                        debug(f"[Sim {sim_id}] Incluindo validador {v.id}", t)
                 else:
-                    pause(f"[Sim {sim_id}] Houve quorum, mas não houve alteração de validadores", t)
+                    debug(f"[Sim {sim_id}] Houve quorum, mas não houve alteração de validadores", t)
             else:
-                if network_stopped_producing_blocks(validators, consecutive_failure_count):
-                    pause(f"[Sim {sim_id}] Não houve ajuste de validadores. A rede está parada", t)
+                if network_stopped_producing_blocks(validators, consecutive_failure_count, t):
+                    debug(f"[Sim {sim_id}] Não houve ajuste de validadores. A rede está parada", t)
                 else:
-                    pause(f"[Sim {sim_id}] Não houve ajuste de validadores. Falta quorum", t)
-            schedule(events, t + meeting_interval_seconds, "meeting_adjust", None)
+                    debug(f"[Sim {sim_id}] Não houve ajuste de validadores. Falta quorum", t)
+            schedule(events, t + reset_meeting_interval_seconds, "meeting_adjust", None)
 
     # ---------------------------------------------------------------------
     # Pós‑processamento idêntico ao original
@@ -437,14 +480,16 @@ config_fields = [
     "num_simulations",
     "block_time",
     "request_timeout",
-    "p_operator_absence",
+    "reset_meeting_p_operator_absence",
     "T_fails_short_days",
     "T_fails_long_days",
     "mean_short_offline_minutes",
     "mean_long_offline_hours",
     "simulation_duration_days",
     "num_validators",
-    "meeting_interval_in_hours",
+    "reset_meeting_interval_in_hours",
+    "adjust_procedure_interval_in_blocks",
+    "adjust_procedure_call_failure_probability",
 ]
 with open(output_filename, 'a', encoding='latin-1') as f:
     f.write("\n")
@@ -459,7 +504,8 @@ with open(output_filename, 'a', encoding='latin-1') as f:
     f.write(f"intervalos >= 120 minutos;{count_120}\n")
 
 # close the blocks file when done
-block_out_f.close()
+if block_out_f is not None:
+    block_out_f.close()
 
 print(f"\nAggregated block intervals CSV generated: '{output_filename}'")
 print(f"Per-block CSV generated: '{block_output_filename}'")
