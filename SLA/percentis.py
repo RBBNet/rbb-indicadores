@@ -1,3 +1,53 @@
+#!/usr/bin/env python3
+# -----------------------------------------------------------------------------
+# percentis.py
+#
+# ENTRADA (arquivo de dados):
+#   - CSV separado por ponto-e-vírgula (;)
+#   - Cabeçalho deve conter ao menos: sim_id;timestamp;proposer_validator
+#       * proposer_validator é lida apenas para permitir compatibilidade, não usada.
+#   - Pode haver colunas extras (ignoradas).
+#   - Cada linha representa um evento (ex: produção de bloco) dentro de uma simulação (sim_id).
+#   - Os timestamps (segundos; int ou float) DEVEM estar em ordem não decrescente dentro de cada sim_id.
+#   - Para cada sim_id, os intervalos são calculados como diferença entre timestamps consecutivos.
+#   - Linhas onde um sim_id aparece só uma vez não geram intervalo.
+#   - Intervalos negativos (timestamp atual < anterior dentro do mesmo sim_id) causam abort (anomalia).
+#
+# MODOS DE USO:
+#   1) Modo padrão (default):
+#        python percentis.py arquivo.csv v1 v2 v3 [--tol X] [--chunksize N]
+#      - v1, v2, v3: valores-alvo de intervalo (segundos).
+#      - Calcula, para cada alvo, o percentil: se houver intervalo exatamente igual (|a-b|<=tol),
+#        percentil = posição (1-based) / total * 100 da primeira ocorrência.
+#        Caso contrário, usa contagem de valores estritamente menores como aproximação.
+#      - Leitura em streaming: não armazena todos os intervalos.
+#
+#   2) Modo -perc:
+#        python percentis.py arquivo.csv p1 p2 p3 -perc
+#      - p1, p2, p3: percentuais (0.00001–99.9999).
+#      - Extrai TODOS os intervalos em memória, ordena e retorna os valores dos quantis.
+#
+# ARGUMENTOS PRINCIPAIS:
+#   arquivo      : caminho do CSV de entrada.
+#   valor1..3    : alvos (modo padrão) ou percentis (modo -perc).
+#   --tol        : tolerância absoluta para considerar igualdade (default 0).
+#   --chunksize  : linhas por chunk na leitura incremental (default 500k).
+#   --casas      : casas decimais ao formatar percentuais (saída textual).
+#
+# SAÍDA:
+#   - Impressa em stdout (não gera arquivo).
+#   - Mostra total de intervalos e resultados dos percentis.
+#
+# EXEMPLO (modo padrão):
+#   python percentis.py dados.csv 5 8 12
+#
+# EXEMPLO (modo -perc):
+#   python percentis.py dados.csv 95 99 99.9 -perc
+#
+# NOTAS:
+#   - Percentil definido via índice k = ceil(p/100 * n) - 1 após ordenar (modo -perc).
+#   - Em modo streaming não há ordenação global; cálculo é baseado em contagens.
+# -----------------------------------------------------------------------------
 import argparse
 import sys
 import math
@@ -39,17 +89,14 @@ def calcular_percentis_stream(caminho_csv: str, v1: float, v2: float, v3: float,
 
             total += 1
 
-            # v1
             if intervalo < v1:
                 lt1 += 1
             elif eq(intervalo, v1):
                 eq1 += 1
-            # v2
             if intervalo < v2:
                 lt2 += 1
             elif eq(intervalo, v2):
                 eq2 += 1
-            # v3
             if intervalo < v3:
                 lt3 += 1
             elif eq(intervalo, v3):
