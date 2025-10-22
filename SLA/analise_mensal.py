@@ -93,13 +93,17 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
                 # Calcular intervalo se não for o primeiro timestamp deste sim_id
                 prev = last_ts_por_sim.get(sim_id)
                 if prev is not None:
+                    # Determinar o mês do timestamp anterior
+                    prev_mes_id = int(prev // SEGUNDOS_POR_MES) + 1
+                    
                     intervalo = ts - prev
                     if intervalo < 0:
                         print(f'Aviso: Timestamp fora de ordem para sim_id={sim_id}, intervalo={intervalo}')
                         continue
                     
-                    # Atribuir intervalo ao mês do timestamp atual
-                    dados_por_mes[mes_id]['intervalos'].append(intervalo)
+                    # Atribuir intervalo ao mês APENAS se ambos timestamps estão no mesmo mês
+                    if mes_id == prev_mes_id:
+                        dados_por_mes[mes_id]['intervalos'].append(intervalo)
                 
                 last_ts_por_sim[sim_id] = ts
                 
