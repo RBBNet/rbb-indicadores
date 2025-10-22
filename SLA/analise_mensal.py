@@ -7,22 +7,23 @@ ENTRADA:
   - CSV separado por ponto-e-vírgula (;) com colunas: sim_id;timestamp;proposer_validator
   - Arquivo de configuração JSON (simulation_config.json) contendo block_time
   - Timestamps devem estar em segundos (int ou float)
-  - Na maioria dos casos, há apenas um sim_id (simulação longa)
+  - Pode conter múltiplos sim_id (cada um é processado independentemente)
 
 PROCESSAMENTO:
   - Agrupa timestamps por mês (30 dias = 2.592.000 segundos)
   - Para cada mês:
-    * Calcula intervalos entre blocos consecutivos
+    * Calcula intervalos entre blocos consecutivos DENTRO DO MESMO MÊS
+    * Intervalos que cruzam fronteiras de mês são ignorados
     * Calcula percentis 99% e 99.9% dos intervalos
     * Calcula eficiência: blocos_produzidos / blocos_ideais * 100
-    * blocos_ideais = tempo_do_mes / block_time
+    * blocos_ideais = SEGUNDOS_POR_MÊS / block_time (número esperado de blocos em 30 dias)
 
 SAÍDA:
-  - CSV separado por vírgula (,) com colunas: mes_id,percentil99,percentil99_9,eficiencia
+  - CSV separado por ponto-e-vírgula (;) com colunas: mes_id;percentil99;percentil99.9;eficiencia
   - mes_id: número do mês (1, 2, 3, ...)
   - percentil99: valor do percentil 99% dos intervalos do mês
-  - percentil99_9: valor do percentil 99.9% dos intervalos do mês
-  - eficiencia: percentual de eficiência do mês
+  - percentil99.9: valor do percentil 99.9% dos intervalos do mês
+  - eficiencia: percentual de eficiência do mês (blocos produzidos vs esperados)
 
 EXEMPLO DE USO:
   python analise_mensal.py dados.csv --config simulation_config.json --output resultado.csv
@@ -76,7 +77,8 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
     SEGUNDOS_POR_MES = 30 * 24 * 3600  # 30 dias
     
     last_ts_por_sim = {}
-    dados_por_mes = defaultdict(lambda: {'intervalos': [], 'timestamps': []})
+    last_mes_por_sim = {}
+    dados_por_mes = defaultdict(lambda: {'intervalos': [], 'blocos_produzidos': 0})
     
     usecols = ['sim_id', 'timestamp']
     dtypes = {'sim_id': str, 'timestamp': float}
@@ -88,20 +90,23 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
             for sim_id, ts in zip(chunk['sim_id'].values, chunk['timestamp'].values):
                 # Determinar mês (baseado em períodos de 30 dias)
                 mes_id = int(ts // SEGUNDOS_POR_MES) + 1
-                dados_por_mes[mes_id]['timestamps'].append(ts)
+                dados_por_mes[mes_id]['blocos_produzidos'] += 1
                 
                 # Calcular intervalo se não for o primeiro timestamp deste sim_id
-                prev = last_ts_por_sim.get(sim_id)
-                if prev is not None:
-                    intervalo = ts - prev
-                    if intervalo < 0:
-                        print(f'Aviso: Timestamp fora de ordem para sim_id={sim_id}, intervalo={intervalo}')
-                        continue
-                    
-                    # Atribuir intervalo ao mês do timestamp atual
-                    dados_por_mes[mes_id]['intervalos'].append(intervalo)
+                prev_ts = last_ts_por_sim.get(sim_id)
+                prev_mes = last_mes_por_sim.get(sim_id)
+                
+                if prev_ts is not None and prev_mes is not None:
+                    # Só calcular intervalo se o bloco anterior estava no mesmo mês
+                    if prev_mes == mes_id:
+                        intervalo = ts - prev_ts
+                        if intervalo < 0:
+                            print(f'Aviso: Timestamp fora de ordem para sim_id={sim_id}, intervalo={intervalo}')
+                        else:
+                            dados_por_mes[mes_id]['intervalos'].append(intervalo)
                 
                 last_ts_por_sim[sim_id] = ts
+                last_mes_por_sim[sim_id] = mes_id
                 
     except Exception as e:
         print(f'Erro ao processar CSV: {e}', file=sys.stderr)
@@ -110,24 +115,15 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
     # Calcular métricas para cada mês
     resultado = {}
     for mes_id, dados in dados_por_mes.items():
-        timestamps = sorted(dados['timestamps'])
         intervalos = dados['intervalos']
+        blocos_produzidos = dados['blocos_produzidos']
         
-        if not timestamps:
+        if blocos_produzidos == 0:
             continue
-            
-        # Calcular tempo total real baseado nos timestamps do mês
-        blocos_produzidos = len(timestamps)
         
-        if len(timestamps) > 1:
-            # Usar o tempo real entre primeiro e último bloco do mês
-            tempo_total = timestamps[-1] - timestamps[0]
-        else:
-            # Se só há um bloco, assumir que representa o block_time
-            tempo_total = block_time
-        
-        # Blocos ideais = tempo_total / block_time (quantos blocos caberiam nesse tempo)
-        blocos_ideais = tempo_total / block_time if block_time > 0 and tempo_total > 0 else blocos_produzidos
+        # Blocos ideais = SEGUNDOS_POR_MES / block_time
+        # Este é o número de blocos esperados em um mês de 30 dias
+        blocos_ideais = SEGUNDOS_POR_MES / block_time if block_time > 0 else blocos_produzidos
         eficiencia = (blocos_produzidos / blocos_ideais * 100) if blocos_ideais > 0 else 100
         
         # Calcular percentis
@@ -150,8 +146,8 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
 def escrever_resultado(dados: Dict[int, Dict], output_path: str):
     """Escreve o resultado em CSV."""
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(['mes_id', 'percentil99', 'percentil99_9', 'eficiencia'])
+        writer = csv.writer(f, delimiter=';')
+        writer.writerow(['mes_id', 'percentil99', 'percentil99.9', 'eficiencia'])
         
         for mes_id in sorted(dados.keys()):
             row = dados[mes_id]
