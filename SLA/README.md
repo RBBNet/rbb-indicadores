@@ -14,6 +14,8 @@ Esta pasta reúne scripts em Python utilizados para simular a operação da rede
 - **`simulacao6.py`** – Simulador de falhas orientado a eventos. Lê `simulation_config.json` e produz arquivos CSV com os intervalos entre blocos.
 - **`run.py`** – Executa várias simulações em sequência utilizando o `simulacao6.py`, alterando automaticamente `num_validators` e `meeting_interval_in_hours`. Os resultados são armazenados em `data/batch/`.
 - **`graficos_perc_minima.py`** – Gera gráficos relacionando a menor participação percentual de validadores com estatísticas de intervalo entre blocos.
+- **`analise_mensal.py`** – Analisa dados de blocos por mês (30 dias), calculando percentis de intervalos e eficiência de produção de blocos.
+- **`percentis.py`** – Calcula percentis de intervalos entre blocos a partir de arquivos CSV de simulação.
 
 ## Uso
 
@@ -50,4 +52,16 @@ Uma execução típica segue a sequência abaixo:
    ```
 
    Três gráficos de dispersão mostram a relação entre participação mínima e os intervalos entre blocos.
+
+5. **Análise mensal de intervalos**
+
+   ```bash
+   python analise_mensal.py <arquivo.csv> [--config simulation_config.json] [--output analise_mensal.csv]
+   ```
+
+   Processa um arquivo CSV de blocos e gera análise mensal com:
+   - Percentil 99% e 99.9% dos intervalos entre blocos
+   - Eficiência de produção (blocos produzidos vs. esperados baseado em `block_time`)
+   
+   **Importante**: O arquivo CSV deve preferencialmente conter apenas um `sim_id` para análises mensais precisas. Intervalos são calculados apenas dentro do mesmo mês, ignorando cruzamentos de fronteiras mensais.
 
