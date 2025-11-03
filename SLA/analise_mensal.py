@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Análise mensal de intervalos entre blocos e eficiência.
+Análise mensal de intervalos entre blocos e eficiência (otimizado para arquivos grandes).
 
 ENTRADA:
   - CSV separado por ponto-e-vírgula (;) com colunas: sim_id;timestamp;proposer_validator
@@ -10,10 +10,11 @@ ENTRADA:
   - Na maioria dos casos, há apenas um sim_id (simulação longa)
 
 PROCESSAMENTO:
+  - Streaming verdadeiro: não armazena todos os dados em memória
   - Agrupa timestamps por mês (30 dias = 2.592.000 segundos)
   - Para cada mês:
     * Calcula intervalos entre blocos consecutivos
-    * Calcula percentis 99% e 99.9% dos intervalos
+    * Calcula percentis 99% e 99.9% dos intervalos usando algoritmo online
     * Calcula eficiência: blocos_produzidos / blocos_ideais * 100
     * blocos_ideais = tempo_do_mes / block_time
 
@@ -33,9 +34,59 @@ import json
 import sys
 import math
 import csv
+import heapq
+import random
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional
 import pandas as pd
+
+class QuantileEstimator:
+    """Estimador de quantis usando reservoir sampling para economizar memória."""
+    
+    def __init__(self, target_quantiles: List[float], max_samples: int = 10000):
+        self.target_quantiles = sorted(target_quantiles)
+        self.max_samples = max_samples
+        self.samples = []
+        self.total_count = 0
+        
+    def add(self, value: float):
+        self.total_count += 1
+        
+        if len(self.samples) < self.max_samples:
+            # Ainda temos espaço, adiciona diretamente
+            self.samples.append(value)
+        else:
+            # Usar reservoir sampling para manter amostra representativa
+            # Substitui uma amostra aleatória com probabilidade max_samples/total_count
+            if random.randint(1, self.total_count) <= self.max_samples:
+                replace_idx = random.randint(0, self.max_samples - 1)
+                self.samples[replace_idx] = value
+    
+    def get_quantiles(self) -> Dict[float, float]:
+        if not self.samples:
+            return {q: float('nan') for q in self.target_quantiles}
+        
+        # Ordena as amostras para calcular percentis
+        sorted_samples = sorted(self.samples)
+        n = len(sorted_samples)
+        result = {}
+        
+        for q in self.target_quantiles:
+            # Usa interpolação linear para percentis mais precisos
+            rank = (q / 100.0) * (n - 1)
+            lower_idx = int(math.floor(rank))
+            upper_idx = int(math.ceil(rank))
+            
+            if lower_idx == upper_idx:
+                result[q] = sorted_samples[lower_idx]
+            else:
+                # Interpolação linear
+                lower_val = sorted_samples[lower_idx]
+                upper_val = sorted_samples[upper_idx]
+                weight = rank - lower_idx
+                result[q] = lower_val + weight * (upper_val - lower_val)
+                
+        return result
 
 def load_config(config_path: str) -> dict:
     """Carrega configuração do JSON."""
@@ -49,46 +100,78 @@ def load_config(config_path: str) -> dict:
         print(f'Erro: JSON inválido em {config_path}: {e}', file=sys.stderr)
         sys.exit(1)
 
-def calcular_percentil(valores: List[float], percentil: float) -> float:
-    """Calcula percentil de uma lista de valores."""
-    if not valores:
-        return float('nan')
+class MensalData:
+    """Estrutura para dados mensais otimizada para memória."""
     
-    valores_ordenados = sorted(valores)
-    n = len(valores_ordenados)
-    
-    # Usa definição: k = ceil(p/100 * n) - 1
-    k = math.ceil((percentil / 100.0) * n) - 1
-    if k < 0:
-        k = 0
-    if k >= n:
-        k = n - 1
-    
-    return valores_ordenados[k]
+    def __init__(self, max_samples: int = 10000):
+        self.quantile_estimator = QuantileEstimator([99.0, 99.9], max_samples)
+        self.blocos_count = 0
+        self.primeiro_timestamp: Optional[float] = None
+        self.ultimo_timestamp: Optional[float] = None
+        
+    def add_bloco(self, timestamp: float):
+        self.blocos_count += 1
+        if self.primeiro_timestamp is None:
+            self.primeiro_timestamp = timestamp
+        self.ultimo_timestamp = timestamp
+        
+    def add_intervalo(self, intervalo: float):
+        self.quantile_estimator.add(intervalo)
+        
+    def get_metrics(self, block_time: float) -> Dict[str, float]:
+        # Calcular tempo total e eficiência
+        if self.primeiro_timestamp is not None and self.ultimo_timestamp is not None:
+            tempo_total = self.ultimo_timestamp - self.primeiro_timestamp
+        else:
+            tempo_total = block_time
+            
+        blocos_ideais = tempo_total / block_time if block_time > 0 and tempo_total > 0 else self.blocos_count
+        eficiencia = (self.blocos_count / blocos_ideais * 100) if blocos_ideais > 0 else 100
+        
+        # Obter quantis
+        quantiles = self.quantile_estimator.get_quantiles()
+        
+        return {
+            'percentil99': quantiles[99.0],
+            'percentil99_9': quantiles[99.9],
+            'eficiencia': eficiencia,
+            'blocos_produzidos': self.blocos_count,
+            'blocos_ideais': blocos_ideais,
+            'intervalos_count': self.quantile_estimator.total_count
+        }
 
-def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) -> Dict[int, Dict]:
+def processar_dados_streaming(csv_path: str, block_time: float, chunksize: int = 100_000, max_samples: int = 10000) -> Dict[int, Dict]:
     """
-    Processa o CSV e organiza dados por mês.
-    
-    Returns:
-        Dict[mes_id, {'intervalos': List[float], 'blocos_produzidos': int, 'tempo_total': float}]
+    Processa o CSV em modo streaming para economizar memória.
     """
     SEGUNDOS_POR_MES = 30 * 24 * 3600  # 30 dias
     
     last_ts_por_sim = {}
-    dados_por_mes = defaultdict(lambda: {'intervalos': [], 'timestamps': []})
+    dados_por_mes: Dict[int, MensalData] = defaultdict(lambda: MensalData(max_samples))
     
     usecols = ['sim_id', 'timestamp']
     dtypes = {'sim_id': str, 'timestamp': float}
     
     print(f"Processando arquivo: {csv_path}")
+    print(f"Chunk size: {chunksize:,}")
+    print(f"Max samples por mês: {max_samples:,}")
+    
+    chunks_processados = 0
+    linhas_processadas = 0
     
     try:
         for chunk in pd.read_csv(csv_path, sep=';', usecols=usecols, dtype=dtypes, chunksize=chunksize):
+            chunks_processados += 1
+            chunk_size = len(chunk)
+            linhas_processadas += chunk_size
+            
+            if chunks_processados % 10 == 0:
+                print(f"  Processados {chunks_processados} chunks, {linhas_processadas:,} linhas")
+            
             for sim_id, ts in zip(chunk['sim_id'].values, chunk['timestamp'].values):
-                # Determinar mês (baseado em períodos de 30 dias)
+                # Determinar mês
                 mes_id = int(ts // SEGUNDOS_POR_MES) + 1
-                dados_por_mes[mes_id]['timestamps'].append(ts)
+                dados_por_mes[mes_id].add_bloco(ts)
                 
                 # Calcular intervalo se não for o primeiro timestamp deste sim_id
                 prev = last_ts_por_sim.get(sim_id)
@@ -98,8 +181,8 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
                         print(f'Aviso: Timestamp fora de ordem para sim_id={sim_id}, intervalo={intervalo}')
                         continue
                     
-                    # Atribuir intervalo ao mês do timestamp atual
-                    dados_por_mes[mes_id]['intervalos'].append(intervalo)
+                    # Adicionar intervalo ao mês do timestamp atual
+                    dados_por_mes[mes_id].add_intervalo(intervalo)
                 
                 last_ts_por_sim[sim_id] = ts
                 
@@ -107,43 +190,17 @@ def processar_dados(csv_path: str, block_time: float, chunksize: int = 500_000) 
         print(f'Erro ao processar CSV: {e}', file=sys.stderr)
         sys.exit(1)
     
-    # Calcular métricas para cada mês
+    print(f"\nProcessamento concluído: {linhas_processadas:,} linhas em {chunks_processados} chunks")
+    
+    # Converter para formato final
     resultado = {}
     for mes_id, dados in dados_por_mes.items():
-        timestamps = sorted(dados['timestamps'])
-        intervalos = dados['intervalos']
+        metrics = dados.get_metrics(block_time)
+        resultado[mes_id] = metrics
         
-        if not timestamps:
-            continue
-            
-        # Calcular tempo total real baseado nos timestamps do mês
-        blocos_produzidos = len(timestamps)
-        
-        if len(timestamps) > 1:
-            # Usar o tempo real entre primeiro e último bloco do mês
-            tempo_total = timestamps[-1] - timestamps[0]
-        else:
-            # Se só há um bloco, assumir que representa o block_time
-            tempo_total = block_time
-        
-        # Blocos ideais = tempo_total / block_time (quantos blocos caberiam nesse tempo)
-        blocos_ideais = tempo_total / block_time if block_time > 0 and tempo_total > 0 else blocos_produzidos
-        eficiencia = (blocos_produzidos / blocos_ideais * 100) if blocos_ideais > 0 else 100
-        
-        # Calcular percentis
-        p99 = calcular_percentil(intervalos, 99.0) if intervalos else float('nan')
-        p99_9 = calcular_percentil(intervalos, 99.9) if intervalos else float('nan')
-        
-        resultado[mes_id] = {
-            'percentil99': p99,
-            'percentil99_9': p99_9,
-            'eficiencia': eficiencia,
-            'blocos_produzidos': blocos_produzidos,
-            'blocos_ideais': blocos_ideais,
-            'intervalos_count': len(intervalos)
-        }
-        
-        print(f"Mês {mes_id}: {blocos_produzidos} blocos, {len(intervalos)} intervalos, eficiência: {eficiencia:.2f}%")
+        print(f"Mês {mes_id}: {metrics['blocos_produzidos']:,} blocos, "
+              f"{metrics['intervalos_count']:,} intervalos, "
+              f"eficiência: {metrics['eficiencia']:.2f}%")
     
     return resultado
 
@@ -164,15 +221,17 @@ def escrever_resultado(dados: Dict[int, Dict], output_path: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Análise mensal de intervalos entre blocos e eficiência.'
+        description='Análise mensal de intervalos entre blocos e eficiência (otimizado para arquivos grandes).'
     )
     parser.add_argument('arquivo', help='Arquivo CSV de entrada (sim_id;timestamp;proposer_validator)')
     parser.add_argument('--config', default='simulation_config.json', 
                         help='Arquivo de configuração JSON (default: simulation_config.json)')
     parser.add_argument('--output', default='analise_mensal.csv',
                         help='Arquivo CSV de saída (default: analise_mensal.csv)')
-    parser.add_argument('--chunksize', type=int, default=500_000,
-                        help='Tamanho do chunk para leitura (default: 500k)')
+    parser.add_argument('--chunksize', type=int, default=100_000,
+                        help='Tamanho do chunk para leitura (default: 100k, diminua se der OOM)')
+    parser.add_argument('--max-samples', type=int, default=10_000,
+                        help='Máximo de amostras por mês para estimativa de percentis (default: 10k)')
     parser.add_argument('--verbose', action='store_true',
                         help='Mostrar informações detalhadas')
     
@@ -186,9 +245,10 @@ def main():
         print(f"Block time configurado: {block_time} segundos")
         print(f"Arquivo de entrada: {args.arquivo}")
         print(f"Arquivo de saída: {args.output}")
+        print(f"Max samples por mês: {args.max_samples:,}")
     
     # Processar dados
-    dados = processar_dados(args.arquivo, block_time, args.chunksize)
+    dados = processar_dados_streaming(args.arquivo, block_time, args.chunksize, args.max_samples)
     
     if not dados:
         print("Nenhum dado foi processado. Verifique o arquivo de entrada.")
@@ -205,7 +265,7 @@ def main():
         print("\nResumo por mês:")
         for mes_id in sorted(dados.keys()):
             row = dados[mes_id]
-            print(f"  Mês {mes_id}: {row['blocos_produzidos']} blocos, "
+            print(f"  Mês {mes_id}: {row['blocos_produzidos']:,} blocos, "
                   f"eficiência {row['eficiencia']:.2f}%, "
                   f"P99: {row['percentil99']:.2f}, "
                   f"P99.9: {row['percentil99_9']:.2f}")

@@ -1,5 +1,5 @@
 {
-    "num_simulations": 10000,
+    "num_simulations": 2000,
     "block_time": 4,
     "request_timeout": 8,
     "T_fails_short_days": 2.5,
@@ -7,7 +7,7 @@
     "mean_short_offline_minutes": 8,
     "mean_long_offline_hours": 91,
     "simulation_duration_days": 30,
-    "num_validators": 8,
+    "num_validators": 10,
     "reset_meeting_p_operator_absence": 0,
     "reset_meeting_interval_in_hours": 0,
     "adjust_procedure_interval_in_blocks": 105,

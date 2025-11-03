@@ -81,13 +81,14 @@ def simulate_one(
 	mean_short: float,
 	mean_long: float,
 	clip: bool = False,
-) -> List[Tuple[int, int, int]]:
-	"""Roda uma simulação retornando lista de (sim_id, timestamp, duration)."""
+) -> Tuple[List[Tuple[int, int, int]], float]:
+	"""Roda uma simulação retornando lista de (sim_id, timestamp, duration) e percentual de inoperância."""
 	records: List[Tuple[int, int, int]] = []
 	lam_total = lambda_short + lambda_long
 	if lam_total <= 0:
-		return records
+		return records, 0.0
 	t = 0.0
+	total_downtime = 0.0
 	while True:
 		# Tempo até próxima falha
 		wait = random.expovariate(lam_total)
@@ -122,7 +123,12 @@ def simulate_one(
 			continue  # não emitir falha de 0s
 
 		records.append((sim_id, start_int, dur_int))
-	return records
+		total_downtime += dur_int
+	
+	# Calcular percentual de inoperância
+	percentual_inoperancia = (total_downtime / duration_seconds * 100) if duration_seconds > 0 else 0.0
+	
+	return records, percentual_inoperancia
 
 
 def main():
@@ -164,8 +170,9 @@ def main():
 		print(f"  clip = {'on' if args.clip else 'off'}")
 
 	all_records: List[Tuple[int, int, int]] = []
+	percentuais_inoperancia: List[float] = []
 	for sim_id in range(1, num_simulations + 1):
-		recs = simulate_one(
+		recs, percentual = simulate_one(
 			sim_id,
 			duration_seconds,
 			lambda_short,
@@ -175,8 +182,9 @@ def main():
 			clip=args.clip,
 		)
 		all_records.extend(recs)
+		percentuais_inoperancia.append(percentual)
 		if args.verbose:
-			print(f"Sim {sim_id}: {len(recs)} falhas")
+			print(f"Sim {sim_id}: {len(recs)} falhas, inoperância: {percentual:.2f}%")
 
 	# Escreve CSV
 	with open(args.outfile, "w", encoding="utf-8", newline="") as f:
@@ -184,8 +192,32 @@ def main():
 		for sim_id, ts, dur in all_records:
 			f.write(f"{sim_id};{ts};{dur}\n")
 
+	# Calcula percentual médio de inoperância
+	percentual_medio_inoperancia = sum(percentuais_inoperancia) / len(percentuais_inoperancia) if percentuais_inoperancia else 0.0
+
+	# Anexa parâmetros de configuração no final do mesmo CSV
+	config_fields = [
+		"num_simulations",
+		"T_fails_short_days", 
+		"T_fails_long_days",
+		"mean_short_offline_minutes",
+		"mean_long_offline_hours",
+		"simulation_duration_days"
+	]
+	
+	with open(args.outfile, 'a', encoding='utf-8') as f:
+		f.write("\n")
+		# escreve os parâmetros usados
+		for key in config_fields:
+			value = cfg.get(key, 'N/A')
+			f.write(f"{key};{value}\n")
+		# escreve estatísticas calculadas
+		f.write(f"total_de_falhas;{len(all_records)}\n")
+		f.write(f"percentual_medio_inoperancia;{percentual_medio_inoperancia:.6f}\n")
+
 	print(f"Gerado arquivo: {args.outfile}")
 	print(f"Total de falhas: {len(all_records)} (todas as simulações)")
+	print(f"Percentual médio de inoperância: {percentual_medio_inoperancia:.2f}%")
 
 
 if __name__ == "__main__":
