@@ -6,6 +6,8 @@ Este documento descreve as alterações realizadas no script `issue-metrics.js` 
 
 O commit realizou uma refatoração completa do código, melhorando sua qualidade, legibilidade, tratamento de erros e mensagens de saída.
 
+**Nota:** O script utiliza `import { exit } from 'process'`, permitindo o uso direto de `exit(1)` ao invés de `process.exit(1)`.
+
 ---
 
 ## Alterações Detalhadas
@@ -169,7 +171,7 @@ const paramsClosed = {
 ```
 
 **Mudanças:**
-- Headers em uma única linha (mais compacto e legível)
+- Formatação de headers simplificada em uma única linha para melhor consistência no código
 
 ---
 
