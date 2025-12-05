@@ -28,8 +28,9 @@ pause
 goto menu
 
 :blockAnalytics
-set /p initiativesPath=Digite o caminho para o arquivo CSV de iniciativas (Ex: C:\DadosCSV\2025-01\Blocks2025-01.csv):
-node Blocks\block-analytics.js %initiativesPath%
+set /p blocksPath=Digite o caminho para o arquivo CSV de blocos (Ex: C:\DadosCSV\2025-01\Blocks2025-01.csv):
+node Blocks\block-analytics.js %blocksPath% > result\Blocos-estat.txt
+echo Resultado salvo em result\Blocos-estat.txt
 pause
 goto menu
 

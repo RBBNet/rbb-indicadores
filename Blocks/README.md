@@ -85,8 +85,15 @@ node Blocks\block-analytics.js C://DadosCSV/2025-01/blocks2025-01.csv
 A qual retornaria, por exemplo:
 
 ```bash
-Tempo máximo/bloco: xxxx segundos
-Tempo mínimo/bloco: xxxx segundos
-Tempo médio/bloco: xxxx segundos
-Desvio padrão do tempo de produção: xxxx segundos
+Blocos produzidos: xxxx
+Tempo mínimo: xxxx s
+Tempo médio: xxxx s
+Tempo máximo: xxxx s
+Mediana: xxxx s
+Desvio padrão: xxxx s
+Quantil 99%: xxxx s
 ```
+
+### Saída via Menu Interativo
+
+Ao executar através do menu interativo (`run.bat`), o resultado é automaticamente salvo no arquivo `result/Blocos-estat.txt`.
