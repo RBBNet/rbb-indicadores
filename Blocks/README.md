@@ -96,4 +96,28 @@ Quantil 99%: xxxx s
 
 ### Saída via Menu Interativo
 
-Ao executar através do menu interativo (`run.bat`), o resultado é automaticamente salvo no arquivo `result/Blocos-estat.txt`.
+Ao executar através do menu interativo (`run.bat`), o processo é facilitado:
+
+1. O script solicita o mês (MM) e ano (AAAA) de referência
+2. Sugere automaticamente o caminho padrão na rede: `\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\AAAA-MM\blocksAAAA-MM.csv`
+3. Permite confirmar ou informar um caminho alternativo
+4. Copia o arquivo para a pasta local `Blocks\` (devido ao tamanho do arquivo)
+5. Processa as estatísticas
+6. Salva o resultado em `result/Blocos-estat.txt`
+
+**Exemplo de interação:**
+```
+Digite o mes de referencia (MM): 11
+Digite o ano de referencia (AAAA): 2025
+
+Caminho padrao sugerido:
+\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\2025-11\blocks2025-11.csv
+
+Deseja usar este caminho? (S/N): S
+Arquivo encontrado. Copiando para pasta local...
+Copia concluida. Processando estatisticas...
+
+Processamento concluido!
+Resultado salvo em: result\Blocos-estat.txt
+Arquivo temporario: Blocks\blocks2025-11.csv
+```

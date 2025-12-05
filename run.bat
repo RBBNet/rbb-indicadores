@@ -28,9 +28,51 @@ pause
 goto menu
 
 :blockAnalytics
-set /p blocksPath=Digite o caminho para o arquivo CSV de blocos (Ex: C:\DadosCSV\2025-01\Blocks2025-01.csv):
-node Blocks\block-analytics.js %blocksPath% > result\Blocos-estat.txt
-echo Resultado salvo em result\Blocos-estat.txt
+set /p refMonth=Digite o mes de referencia (MM): 
+set /p refYear=Digite o ano de referencia (AAAA): 
+set defaultPath=\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\%refYear%-%refMonth%\blocks%refYear%-%refMonth%.csv
+echo.
+echo Caminho padrao sugerido:
+echo %defaultPath%
+echo.
+set /p useDefault=Deseja usar este caminho? (S/N): 
+if /i "%useDefault%"=="S" (
+    set blocksPath=%defaultPath%
+) else (
+    set /p blocksPath=Digite o caminho completo do arquivo CSV de blocos: 
+)
+
+echo.
+echo Verificando se o arquivo existe...
+if not exist "%blocksPath%" (
+    echo ERRO: Arquivo nao encontrado: %blocksPath%
+    pause
+    goto menu
+)
+
+echo Arquivo encontrado. Copiando para pasta local...
+set localPath=Blocks\blocks%refYear%-%refMonth%.csv
+copy "%blocksPath%" "%localPath%" >nul
+if errorlevel 1 (
+    echo ERRO: Falha ao copiar o arquivo.
+    pause
+    goto menu
+)
+
+echo Copia concluida. Processando estatisticas...
+mkdir result 2>nul
+node Blocks\block-analytics.js "%localPath%" > result\Blocos-estat.txt
+if errorlevel 1 (
+    echo ERRO: Falha ao processar o arquivo.
+    pause
+    goto menu
+)
+
+echo.
+echo Processamento concluido!
+echo Resultado salvo em: result\Blocos-estat.txt
+echo Arquivo temporario: %localPath%
+echo.
 pause
 goto menu
 
