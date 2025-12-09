@@ -38,15 +38,33 @@ npm install
 
 ## Execução das Ferramentas
 
-Para facilitar a execução das ferramentas, você pode utilizar o script `run.bat` no Windows ou `run.sh` no Linux. Esses scripts fornecem um menu interativo para escolher e executar as diferentes ferramentas disponíveis.
+Para facilitar a execução das ferramentas, você pode utilizar os scripts de menu interativo disponíveis:
 
-### Windows
+### Windows (Batch)
 
-Para executar o script no Windows, utilize o seguinte comando na pasta raiz do projeto:
-
-```sh
+```bat
 run.bat
 ```
+
+### Multiplataforma (Node.js)
+
+```bash
+node run.js
+```
+
+ou (se tiver permissões de execução no Linux/Mac):
+
+```bash
+./run.js
+```
+
+Ambos os scripts fornecem o mesmo menu interativo para escolher e executar as diferentes ferramentas disponíveis:
+
+1. Métricas de Produção de Blocos
+2. Estatísticas do Tempo de Produção de Blocos
+3. Acompanhamento das Iniciativas de Maturação do Piloto
+4. Issues em Produção
+5. Sair
 
 ### Linux
 
@@ -61,9 +79,27 @@ Para executar o script no Linux, utilize o seguinte comando na pasta raiz do pro
 O menu interativo permite escolher entre as seguintes opções:
 
 1. **Métricas de Produção de Blocos**: Gera indicadores sobre a produção de blocos.
+   - **Túnel SSH Automático**: Esta opção automaticamente estabelece um túnel SSH para o nó da RBB antes de coletar métricas.
+   - Você pode escolher entre:
+     - **Lab** (rbb-writer01.hom.bndes.net - 172.17.64.21)
+     - **Prod** (vrt2675.bndes.net - 172.17.64.34)
+     - **Customizado** (especificar manualmente IP, porta e host SSH)
+   - O túnel é automaticamente encerrado após a coleta de dados.
+   - Requer acesso SSH aos servidores da RBB.
+
 2. **Estatisticas do Tempo de Producao de Blocos**: Calcula estatísticas do tempo de produção dos blocos.
 3. **Acompanhamento das Iniciativas de Maturação do Piloto**: Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
 4. **Issues em Produção**: Coleta dados sobre o tratamento de incidentes.
 5. **Sair**: Encerra o script.
 
 **Siga as instruções no menu para fornecer os parâmetros necessários para cada ferramenta.**
+
+### Valores Padrão Inteligentes
+
+O script `run.js` oferece valores padrão inteligentes para facilitar a execução:
+
+- **Datas**: Para todas as ferramentas que solicitam datas, o padrão é o primeiro e último dia do mês anterior.
+- **Username SSH**: O padrão é o usuário logado no sistema (variável `%USERNAME%`).
+- **Caminhos de arquivo**: Valores padrão baseados na estrutura do projeto.
+
+Para aceitar um valor padrão, basta pressionar **ENTER** sem digitar nada.

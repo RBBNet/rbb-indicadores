@@ -4,6 +4,12 @@
   "license": "GPL-3.0-only",
   "type": "module",
   "description": "Ferramentas para produção de indicadores operacionais e de governança da RBB",
+  "bin": {
+    "rbb-menu": "./run.js"
+  },
+  "scripts": {
+    "menu": "node run.js"
+  },
   "dependencies": {
     "@octokit/core": "^6.1.4",
     "@octokit/plugin-paginate-graphql": "^5.2.4",
