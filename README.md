@@ -12,6 +12,9 @@ As ferramentas possuem os seguintes requisitos em comum:
 - **NPM** na versão **10.9.0**
 - Arquivo **config.json**, que deve ser criado na pasta raiz deste projeto, com os seguintes parâmetros:
   - Não havendo proxy, pode-se criar o arquivo sem o parâmetro `PROXY_URL`
+  - O token do GitHub deve ter os seguintes escopos para acesso aos repositórios privados:
+    - **`repo`** (acesso completo a repositórios privados)
+    - **`read:project`** (leitura de projetos)
 
 ```json
 {   
@@ -21,6 +24,18 @@ As ferramentas possuem os seguintes requisitos em comum:
     "PROJECT_NUMBER": <project_number>
 }
 ```
+
+**Como gerar o token do GitHub com os escopos corretos:**
+
+1. Acesse: https://github.com/settings/tokens
+2. Clique em "Generate new token" → "Generate new token (classic)"
+3. Dê um nome descritivo (ex: "RBB Indicadores")
+4. Selecione os escopos:
+   - ✅ **repo** (Full control of private repositories)
+   - ✅ **read:project** (Read project data)
+5. Clique em "Generate token"
+6. **Copie o token imediatamente** (ele só será exibido uma vez)
+7. Cole no arquivo `config.json` no campo `GITHUB_RBB_TOKEN`
 
 ## Ferramentas
 

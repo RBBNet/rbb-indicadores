@@ -81,6 +81,132 @@ function ensureDir(dirPath) {
 // Variável global para armazenar o processo do túnel SSH
 let sshTunnelProcess = null;
 
+// Carregar configuração (incluindo token do GitHub)
+let config = {};
+try {
+    const configPath = path.join(__dirname, 'config.json');
+    if (fs.existsSync(configPath)) {
+        config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+} catch (err) {
+    console.warn('Aviso: Nao foi possivel carregar config.json');
+}
+
+// Helper: baixar arquivo via HTTPS e salvar localmente
+import https from 'https';
+import { HttpsProxyAgent } from 'https-proxy-agent';
+
+function downloadFile(url, dest) {
+    return new Promise((resolve, reject) => {
+        // Configurar opções de requisição
+        const options = {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Node.js'
+            }
+        };
+        
+        // Adicionar token do GitHub se disponível e for URL do GitHub
+        if (config.GITHUB_RBB_TOKEN && url.includes('github.com')) {
+            options.headers['Authorization'] = `token ${config.GITHUB_RBB_TOKEN}`;
+            options.headers['Accept'] = 'application/vnd.github.raw';
+        }
+        
+        // Configurar proxy se disponível
+        if (config.PROXY_URL) {
+            options.agent = new HttpsProxyAgent(config.PROXY_URL);
+        }
+        
+        https.get(url, options, (res) => {
+            // Lidar com redirecionamentos
+            if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
+                downloadFile(res.headers.location, dest).then(resolve).catch(reject);
+                return;
+            }
+            
+            // Verificar erros HTTP
+            if (res.statusCode >= 400) {
+                reject(new Error(`HTTP ${res.statusCode}: ${url}`));
+                return;
+            }
+            
+            // Download bem-sucedido - acumular dados
+            const chunks = [];
+            
+            res.on('data', (chunk) => {
+                chunks.push(chunk);
+            });
+            
+            res.on('end', () => {
+                try {
+                    const buffer = Buffer.concat(chunks);
+                    fs.writeFileSync(dest, buffer);
+                    console.log(`Download concluido: ${path.basename(dest)}`);
+                    resolve();
+                } catch (err) {
+                    if (fs.existsSync(dest)) {
+                        fs.unlinkSync(dest);
+                    }
+                    reject(new Error(`Erro ao escrever arquivo ${dest}: ${err.message}`));
+                }
+            });
+            
+            res.on('error', (err) => {
+                if (fs.existsSync(dest)) {
+                    fs.unlinkSync(dest);
+                }
+                reject(new Error(`Erro de rede ao baixar ${url}: ${err.message}`));
+            });
+            
+        }).on('error', (err) => {
+            if (fs.existsSync(dest)) {
+                fs.unlinkSync(dest);
+            }
+            reject(new Error(`Erro de rede ao baixar ${url}: ${err.message}`));
+        });
+    });
+}
+
+// Verifica e baixa os arquivos nodes necessários para a execução
+async function ensureNodesFiles(resultDir) {
+    ensureDir(resultDir);
+    const labLocal = path.join(resultDir, 'nodes_lab.json');
+    const pilotoLocal = path.join(resultDir, 'nodes_piloto.json');
+
+    // Usar GitHub API em vez de raw.githubusercontent.com para repositórios privados
+    const labUrl = 'https://api.github.com/repos/RBBNet/participantes/contents/lab/nodes.json';
+    const pilotoUrl = 'https://api.github.com/repos/RBBNet/participantes/contents/piloto/nodes.json';
+
+    // Para cada arquivo, se já existir, perguntar se deseja sobrescrever
+    if (fs.existsSync(labLocal)) {
+        const useExisting = await questionWithDefault(`Arquivo ${labLocal} existe. Baixar e sobrescrever? (s/n)`, 'n');
+        if (useExisting.toLowerCase() === 's') {
+            console.log(`Baixando ${labUrl} ...`);
+            await downloadFile(labUrl, labLocal);
+        } else {
+            console.log(`Usando ${labLocal}`);
+        }
+    } else {
+        console.log(`Baixando ${labUrl} ...`);
+        await downloadFile(labUrl, labLocal);
+    }
+
+    if (fs.existsSync(pilotoLocal)) {
+        const useExisting = await questionWithDefault(`Arquivo ${pilotoLocal} existe. Baixar e sobrescrever? (s/n)`, 'n');
+        if (useExisting.toLowerCase() === 's') {
+            console.log(`Baixando ${pilotoUrl} ...`);
+            await downloadFile(pilotoUrl, pilotoLocal);
+        } else {
+            console.log(`Usando ${pilotoLocal}`);
+        }
+    } else {
+        console.log(`Baixando ${pilotoUrl} ...`);
+        await downloadFile(pilotoUrl, pilotoLocal);
+    }
+
+    return resultDir;
+}
+
 // Função para criar túnel SSH
 async function createSSHTunnel(remoteHost, remotePort, username, sshHost) {
     return new Promise((resolve, reject) => {
@@ -297,25 +423,36 @@ async function blockMetrics() {
         // Aguardar um pouco para garantir que o túnel está completamente estável
         console.log('Aguardando estabilizacao do tunel...');
         await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Garantir que a pasta result existe e baixar os arquivos nodes se necessário
+        const resultDir = path.join(__dirname, 'result');
         
-        const nodesPath = await question('Digite o caminho para os arquivos nodes.json (Ex: Blocks/node): ');
-        
+        try {
+            await ensureNodesFiles(resultDir);
+        } catch (downloadError) {
+            console.error(`\nERRO ao baixar arquivos nodes: ${downloadError.message}`);
+            console.log('Verifique sua conectividade de rede e configuracoes de proxy.');
+            throw downloadError;
+        }
+
         // Provider sempre será localhost:8545 quando usando túnel
         const provider = 'http://localhost:8545';
-        
+
         console.log(`\nUsando provider: ${provider}`);
         console.log('Executando metricas de producao de blocos...\n');
-        
+
         await runNode(path.join(__dirname, 'Blocks', 'block-metrics.js'), [
             startDate,
             endDate,
             provider,
-            nodesPath
+            resultDir
         ]);
         
     } catch (error) {
-        console.error(`\nERRO ao criar tunel SSH: ${error.message}`);
-        console.log('Verifique suas credenciais e conectividade de rede.');
+        console.error(`\nERRO: ${error.message}`);
+        if (error.message.includes('tunel SSH') || error.message.includes('SSH')) {
+            console.log('Verifique suas credenciais SSH e conectividade de rede.');
+        }
     } finally {
         // Fechar túnel SSH
         closeSSHTunnel();
