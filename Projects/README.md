@@ -19,6 +19,26 @@ Para utilizar essa ferramenta é necessário:
 
 ## Utilização
 
+### Através do Menu Interativo (Recomendado)
+
+Execute o menu principal:
+
+```bash
+node run.js
+```
+
+E escolha a opção **3. Acompanhamento das Iniciativas de Maturação do Piloto**.
+
+O script irá:
+1. Solicitar o período de referência (MM/AAAA) - padrão: mês anterior
+2. Calcular automaticamente o caminho padrão baseado no período escolhido:
+   - Formato: `\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Governança\09 Indicadores\<AAAA-MM>`
+   - Onde `<AAAA-MM>` é o **mês anterior** ao período de referência
+3. Permitir que você confirme ou forneça outro caminho
+4. Listar todas as iniciativas e permitir inclusões/exclusões interativas
+
+### Modo de Linha de Comando
+
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 
 ```bash
@@ -31,6 +51,21 @@ Onde:
   - `<ano-referencia>` deve ser anterior ou igual ao ano corrente.
   - Ambas as datas devem ser passadas obrigatoriamente no formato **MM/AAAA**.
 - `<caminho-csv-iniciativas>` indica o caminho para o arquivo CSV de entrada com os dados das iniciativas da Maturação do Piloto a serem acompanhadas.
+
+### Gerenciamento Interativo de Iniciativas
+
+Após carregar o arquivo CSV, o script exibirá todas as iniciativas e permitirá:
+
+- **Incluir (I)**: Adicionar novas iniciativas
+  - Será solicitado o ID no formato `[Iniciativa][Responsável]`
+  - O script verifica se há correspondência no GitHub
+  - Solicita nome e responsáveis
+  
+- **Excluir (E)**: Remover iniciativas pelo número
+  - A iniciativa será removida do processamento
+  - Não aparecerá no CSV de saída
+  
+- **Continuar (C)**: Prosseguir com o processamento
 
 O CSV de iniciativas deve serguir o seguinte formato:
 
@@ -61,7 +96,7 @@ Ao ser executada, a ferramenta:
   - Somente serão consideradas as issues que tenham em seu título identificadores registrados no CSV de entrada.
 - Para cada *issue* obtida serão buscados comentários que contenham em seu corpo a *tag* `#andamento` e tenham sido registrados no período informado.
 
-Ao final da execução, a ferramenta gerará os seguintes arquivos, em formato CSV, na pasta `result`:
-- `Issues.csv`: Contendo as *issues* identificadas para o projeto.
-- `Comentarios.csv`: Contendo todos os comentários encontrados para as *issues* no período informado.
-- `Iniciativas_updated.csv`: Contendo as iniciativas, conforme reportadas no arquivo de entrada, porém com a atualização da situação na coluna correspondente ao período informado.
+Ao final da execução, a ferramenta gerará os seguintes arquivos, em formato CSV, na pasta **`result`**:
+- **`Issues.csv`**: Contendo as *issues* identificadas para o projeto.
+- **`Comentarios.csv`**: Contendo todos os comentários encontrados para as *issues* no período informado.
+- **`Iniciativas_AAAA-MM.csv`**: Contendo as iniciativas, conforme reportadas no arquivo de entrada (incluindo inclusões/exclusões feitas interativamente), porém com a atualização da situação na coluna correspondente ao período informado. O nome segue o formato `Iniciativas_AAAA-MM.csv`, onde AAAA-MM é o período de referência informado.

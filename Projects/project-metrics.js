@@ -3,9 +3,10 @@ import functions from './project-functions.js';
 import fs from 'fs';
 import path from 'path';
 import papa from 'papaparse';
+import readline from 'readline';
 
 const RESULT_DIR = 'result';
-const RESULT_FILE = 'Iniciativas_updated.csv';
+let RESULT_FILE = 'Iniciativas_updated.csv'; // Será atualizado com o período de referência
 const HEADER_ROW = 0;
 const FIRST_DATA_ROW = HEADER_ROW + 1;
 const ID_COLUMN = 0;
@@ -22,6 +23,131 @@ const NAO_INICIADO = 'Nao_iniciado';
 const ENCERRADO = 'Encerrado';
 const PERIOD_MES_ANO = /(0[1-9]|1[0-2])\/20\d{2}$/;
 const PERIOD_REGEX = /^01\/(0[1-9]|1[0-2])\/20\d{2}$/;
+const ID_REGEX = /^\[.+\]\[.+\]$/;
+
+// Interface para leitura de entrada do usuário
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+// Função helper para fazer perguntas
+function question(query) {
+    return new Promise(resolve => rl.question(query, resolve));
+}
+
+// Função para gerenciar iniciativas ANTES de buscar do GitHub (mais rápido)
+async function manageInitiativesBeforeFetch(initiatives) {
+    let continueManaging = true;
+    
+    while(continueManaging) {
+        const action = await question('Deseja (I)ncluir, (E)xcluir uma iniciativa ou (C)ontinuar? [C]: ');
+        const actionUpper = action.trim().toUpperCase();
+        
+        if(actionUpper === 'C' || actionUpper === '') {
+            continueManaging = false;
+            console.log('\nProsseguindo com a busca no GitHub...\n');
+        } else if(actionUpper === 'E') {
+            // Excluir iniciativa
+            const numStr = await question('Digite o numero da iniciativa a excluir (ou ENTER para cancelar): ');
+            if(numStr.trim() === '') {
+                console.log('Exclusao cancelada.\n');
+                continue;
+            }
+            const num = parseInt(numStr.trim());
+            const index = num - 1 + FIRST_DATA_ROW;
+            
+            if(num < 1 || index >= initiatives.length) {
+                console.log('Numero invalido!\n');
+                continue;
+            }
+            
+            const removedId = initiatives[index][ID_COLUMN];
+            const removedName = initiatives[index][INITIATIVE_COLUMN];
+            initiatives.splice(index, 1);
+            console.log(`Iniciativa ${removedId} - ${removedName} excluida.\n`);
+            
+            // Mostrar lista atualizada
+            console.log('Iniciativas atualizadas:\n');
+            for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
+                const id = initiatives[i][ID_COLUMN];
+                const name = initiatives[i][INITIATIVE_COLUMN];
+                console.log(`${i - FIRST_DATA_ROW + 1}. ${id} - ${name}`);
+            }
+            console.log();
+            
+        } else if(actionUpper === 'I') {
+            // Incluir iniciativa (validação será feita depois)
+            const newId = await question('Digite o ID da nova iniciativa no formato [Iniciativa][Responsavel]: ');
+            
+            if(!ID_REGEX.test(newId.trim())) {
+                console.log('ERRO: ID deve estar no formato [Iniciativa][Responsavel]\n');
+                continue;
+            }
+            
+            const newName = await question('Digite o nome da iniciativa: ');
+            const newResponsibles = await question('Digite os responsaveis: ');
+            
+            // Criar nova linha com valores vazios para todas as colunas de períodos
+            const newRow = new Array(initiatives[HEADER_ROW].length).fill('');
+            newRow[ID_COLUMN] = newId.trim();
+            newRow[INITIATIVE_COLUMN] = newName.trim();
+            newRow[RESPONSIBLES_COLUMN] = newResponsibles.trim();
+            
+            initiatives.push(newRow);
+            console.log(`Iniciativa ${newId.trim()} incluida (sera validada apos buscar issues do GitHub).\n`);
+            
+            // Mostrar lista atualizada
+            console.log('Iniciativas atualizadas:\n');
+            for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
+                const id = initiatives[i][ID_COLUMN];
+                const name = initiatives[i][INITIATIVE_COLUMN];
+                console.log(`${i - FIRST_DATA_ROW + 1}. ${id} - ${name}`);
+            }
+            console.log();
+            
+        } else {
+            console.log('Opcao invalida! Digite I, E ou C.\n');
+        }
+    }
+    
+    return initiatives;
+}
+
+// Função para validar iniciativas incluídas após obter issues do GitHub
+async function validateNewInitiatives(initiatives, activeIssues) {
+    console.log('\n=== Validando Iniciativas Incluidas ===\n');
+    
+    // Verificar cada iniciativa incluída
+    for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
+        const initiativeId = initiatives[i][ID_COLUMN];
+        const idTags = initiativeId.replace('][', ']|[').replaceAll('[', '\\[').replaceAll(']', '\\]').split('|');
+        for(const j in idTags) {
+            idTags[j] = idTags[j].toLowerCase();
+        }
+        
+        let foundMatch = false;
+        let matchedIssue = null;
+        
+        for(let j = 0; j < activeIssues.length; ++j) {
+            const title = activeIssues[j].issue.title.toLowerCase();
+            if(title.search(idTags[0]) >= 0 && title.search(idTags[1]) >= 0) {
+                foundMatch = true;
+                matchedIssue = activeIssues[j];
+                break;
+            }
+        }
+        
+        if(!foundMatch) {
+            console.log(`AVISO: Iniciativa ${initiativeId} nao tem correspondencia no GitHub`);
+        } else {
+            console.log(`OK: Iniciativa ${initiativeId} -> Issue ${matchedIssue.issue.issue_id}`);
+        }
+    }
+    console.log();
+    
+    return initiatives;
+}
 
 main();
 
@@ -41,6 +167,9 @@ async function main() {
 
     const refMonth = parseInt(refPeriodParts[0]);
     const refYear = parseInt(refPeriodParts[1]);
+    
+    // Atualizar nome do arquivo de saída com o período de referência
+    RESULT_FILE = `Iniciativas_${refYear}-${String(refMonth).padStart(2, '0')}.csv`;
     
     // Verifica se o período de referência é futuro
     const today = new Date();
@@ -65,17 +194,37 @@ async function main() {
     console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
     console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
 
-    const initiatives = await loadInitiatives(initiativesFileName);
+    let initiatives = await loadInitiatives(initiativesFileName);
     // Descobre a coluna do CSV que corresponde ao período de referência
     const refColumn = getRefColumn(initiatives, refMonth, refYear);
     if(refColumn == FIRST_DATA_COLUMN) {
         // Ferramenta não sabe tratar o primeiro período, que deve ser inicializado manualmente
         console.error('ERRO: O primeiro período de acompanhamento deve ser inicializado manualmente\n');
+        rl.close();
         process.exit(1);
     }
 
-    console.log('Obtendo iniciativas de Maturação do Piloto...\n');
+    // Permitir que o usuário inclua/exclua iniciativas interativamente ANTES de buscar do GitHub
+    console.log('\n=== Gerenciamento de Iniciativas ===\n');
+    console.log('Iniciativas atualmente no arquivo:\n');
+    
+    // Mostrar todas as iniciativas
+    for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
+        const id = initiatives[i][ID_COLUMN];
+        const name = initiatives[i][INITIATIVE_COLUMN];
+        const responsibles = initiatives[i][RESPONSIBLES_COLUMN];
+        console.log(`${i - FIRST_DATA_ROW + 1}. ${id} - ${name} (${responsibles})`);
+    }
+    console.log();
+    
+    initiatives = await manageInitiativesBeforeFetch(initiatives);
+    
+    console.log('Obtendo iniciativas de Maturação do Piloto do GitHub...\n');
+    console.log('(Isso pode demorar alguns minutos...)\n');
     const activeIssues = await getActiveIssues(refMonth, refYear);
+    
+    // Validar iniciativas incluídas após obter issues
+    initiatives = await validateNewInitiatives(initiatives, activeIssues);
     if(activeIssues.length == 0) {
         console.error('ERRO: Nenhuma issue ativa encontrada.\n');
     }
@@ -139,6 +288,8 @@ async function main() {
     console.log('Gerando arquivos atualizado de iniciativas...');
     await writeCsv(RESULT_DIR, RESULT_FILE, initiatives);
     console.log();
+    
+    rl.close();
 }
 
 function initiativeHasPreviousState(initiative, refColumn, state) {

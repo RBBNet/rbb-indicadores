@@ -9,8 +9,8 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Interface para leitura de entrada do usuário
-const rl = readline.createInterface({
+// Interface para leitura de entrada do usuário (mutável para permitir recriar)
+let rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
@@ -42,7 +42,16 @@ function pause() {
 // Função para executar comando Node.js
 function runNode(scriptPath, args = []) {
     return new Promise((resolve, reject) => {
-        const child = spawn('node', [scriptPath, ...args], {
+        // Escapar argumentos com aspas duplas para Windows
+        const quotedArgs = args.map(arg => {
+            // Se o argumento contém espaços ou caracteres especiais, envolver em aspas
+            if (arg.includes(' ') || arg.includes('\\') || arg.includes('/')) {
+                return `"${arg}"`;
+            }
+            return arg;
+        });
+        
+        const child = spawn('node', [scriptPath, ...quotedArgs], {
             stdio: 'inherit',
             shell: true
         });
@@ -541,12 +550,41 @@ async function projectMetrics() {
     const defaultPeriod = `${String(lastMonth.getMonth() + 1).padStart(2, '0')}/${lastMonth.getFullYear()}`;
     
     const refPeriod = await questionWithDefault('Digite o periodo de referencia (MM/AAAA)', defaultPeriod);
-    const initiativesPath = await question('Digite o caminho para o arquivo CSV de iniciativas (Ex: Projects/tmp/arquivo.csv): ');
+    
+    // Calcular o mês anterior ao período de referência para o caminho
+    const refPeriodParts = refPeriod.split('/');
+    const refMonth = parseInt(refPeriodParts[0]);
+    const refYear = parseInt(refPeriodParts[1]);
+    
+    // Calcular mês anterior (para o caminho do arquivo)
+    let pathMonth = refMonth - 1;
+    let pathYear = refYear;
+    if (pathMonth === 0) {
+        pathMonth = 12;
+        pathYear = refYear - 1;
+    }
+    
+    // Caminho completo incluindo o nome do arquivo CSV
+    const defaultPath = `\\\\bndes.net\\bndes\\Grupos\\BNDES Blockchain\\RBB\\Governança\\09 Indicadores\\${pathYear}-${String(pathMonth).padStart(2, '0')}\\Iniciativas_${pathYear}-${String(pathMonth).padStart(2, '0')}.csv`;
+    
+    const initiativesPath = await questionWithDefault(
+        'Digite o caminho completo para o arquivo CSV de iniciativas',
+        defaultPath
+    );
+    
+    // Fechar readline do run.js para permitir que project-metrics.js use o stdin
+    rl.close();
     
     await runNode(path.join(__dirname, 'Projects', 'project-metrics.js'), [
         refPeriod,
         initiativesPath
     ]);
+    
+    // Recriar readline após execução do script filho
+    rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
     
     await pause();
 }
@@ -566,10 +604,19 @@ async function issueMetrics() {
     const startDate = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaultStartDate);
     const endDate = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaultEndDate);
     
+    // Fechar readline do run.js para permitir que issue-metrics.js use o stdin
+    rl.close();
+    
     await runNode(path.join(__dirname, 'Issues', 'issue-metrics.js'), [
         startDate,
         endDate
     ]);
+    
+    // Recriar readline após execução do script filho
+    rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
     
     await pause();
 }
