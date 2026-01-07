@@ -65,6 +65,16 @@ Após carregar o arquivo CSV, o script exibirá todas as iniciativas e permitir�
   - A iniciativa será removida do processamento
   - Não aparecerá no CSV de saída
   
+- **Reordenar (R)**: Ajustar a ordem das iniciativas
+  - Solicita o número da iniciativa a ser movida
+  - Solicita a posição destino
+  - A iniciativa na posição destino será deslocada para a posição seguinte
+  - Exemplo: mover iniciativa 10 para posição 4
+    - A iniciativa 4 original passa para posição 5
+    - A iniciativa 10 passa para posição 4
+    - Todas as demais são reposicionadas conforme necessário
+  - A ordem final será mantida no CSV de saída
+  
 - **Continuar (C)**: Prosseguir com o processamento
 
 O CSV de iniciativas deve serguir o seguinte formato:

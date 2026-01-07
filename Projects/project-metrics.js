@@ -41,7 +41,7 @@ async function manageInitiativesBeforeFetch(initiatives) {
     let continueManaging = true;
     
     while(continueManaging) {
-        const action = await question('Deseja (I)ncluir, (E)xcluir uma iniciativa ou (C)ontinuar? [C]: ');
+        const action = await question('Deseja (I)ncluir, (E)xcluir, (R)eordenar uma iniciativa ou (C)ontinuar? [C]: ');
         const actionUpper = action.trim().toUpperCase();
         
         if(actionUpper === 'C' || actionUpper === '') {
@@ -106,8 +106,63 @@ async function manageInitiativesBeforeFetch(initiatives) {
             }
             console.log();
             
+        } else if(actionUpper === 'R') {
+            // Reordenar iniciativa
+            const fromStr = await question('Digite o numero da iniciativa a ser movida (ou ENTER para cancelar): ');
+            if(fromStr.trim() === '') {
+                console.log('Reordenacao cancelada.\n');
+                continue;
+            }
+            const fromNum = parseInt(fromStr.trim());
+            const fromIndex = fromNum - 1 + FIRST_DATA_ROW;
+            
+            if(fromNum < 1 || fromIndex >= initiatives.length) {
+                console.log('Numero invalido!\n');
+                continue;
+            }
+            
+            const toStr = await question(`Digite o numero da posicao destino (a iniciativa ${fromNum} sera colocada no lugar dela): `);
+            if(toStr.trim() === '') {
+                console.log('Reordenacao cancelada.\n');
+                continue;
+            }
+            const toNum = parseInt(toStr.trim());
+            const toIndex = toNum - 1 + FIRST_DATA_ROW;
+            
+            if(toNum < 1 || toIndex >= initiatives.length) {
+                console.log('Numero invalido!\n');
+                continue;
+            }
+            
+            if(fromNum === toNum) {
+                console.log('Mesma posicao! Nenhuma alteracao feita.\n');
+                continue;
+            }
+            
+            // Remover iniciativa da posição original
+            const movedRow = initiatives.splice(fromIndex, 1)[0];
+            
+            // Calcular nova posição de destino (pode ter mudado após remoção)
+            const newToIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+            
+            // Inserir na nova posição
+            initiatives.splice(newToIndex, 0, movedRow);
+            
+            const movedId = movedRow[ID_COLUMN];
+            const movedName = movedRow[INITIATIVE_COLUMN];
+            console.log(`Iniciativa ${movedId} - ${movedName} movida para a posicao ${toNum}.\n`);
+            
+            // Mostrar lista atualizada
+            console.log('Iniciativas atualizadas:\n');
+            for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
+                const id = initiatives[i][ID_COLUMN];
+                const name = initiatives[i][INITIATIVE_COLUMN];
+                console.log(`${i - FIRST_DATA_ROW + 1}. ${id} - ${name}`);
+            }
+            console.log();
+            
         } else {
-            console.log('Opcao invalida! Digite I, E ou C.\n');
+            console.log('Opcao invalida! Digite I, E, R ou C.\n');
         }
     }
     
