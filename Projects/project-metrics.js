@@ -251,7 +251,27 @@ async function main() {
 
     let initiatives = await loadInitiatives(initiativesFileName);
     // Descobre a coluna do CSV que corresponde ao período de referência
-    const refColumn = getRefColumn(initiatives, refMonth, refYear);
+    let refColumn = findRefColumn(initiatives, refMonth, refYear);
+    const endSemesterMonth = refMonth <= 6 ? 6 : 12;
+    const monthsToAdd = [];
+    for(let month = refMonth; month <= endSemesterMonth; ++month) {
+        if(findRefColumn(initiatives, month, refYear) === -1) {
+            monthsToAdd.push(month);
+        }
+    }
+    if(monthsToAdd.length > 0) {
+        console.log(`AVISO: Há colunas de acompanhamento faltantes entre ${String(refMonth).padStart(2, '0')}/${refYear} e ${String(endSemesterMonth).padStart(2, '0')}/${refYear}.`);
+        console.log(`Posso criar automaticamente as colunas necessárias até o fim do semestre (${String(endSemesterMonth).padStart(2, '0')}/${refYear}).`);
+        const confirm = await question('Deseja continuar? [S/n]: ');
+        const confirmUpper = confirm.trim().toUpperCase();
+        if(confirmUpper === 'N') {
+            console.log('Operação cancelada. Voltando ao menu.');
+            rl.close();
+            return;
+        }
+        addPeriodColumns(initiatives, monthsToAdd, refYear);
+        refColumn = findRefColumn(initiatives, refMonth, refYear);
+    }
     if(refColumn == FIRST_DATA_COLUMN) {
         // Ferramenta não sabe tratar o primeiro período, que deve ser inicializado manualmente
         console.error('ERRO: O primeiro período de acompanhamento deve ser inicializado manualmente\n');
@@ -448,19 +468,24 @@ async function loadInitiatives(initiativesFileName) {
     return initiatives;
 }
 
-function getRefColumn(initiatives, refMonth, refYear) {
-    let refColumn = 0;
+function findRefColumn(initiatives, refMonth, refYear) {
     for(let i = FIRST_DATA_COLUMN; i < initiatives[0].length; ++i) {
-        let dateParts = initiatives[HEADER_ROW][i].split('/');
-        let month = parseInt(dateParts[1], 10);
-        let year = parseInt(dateParts[2], 10);
+        const dateParts = initiatives[HEADER_ROW][i].split('/');
+        const month = parseInt(dateParts[1], 10);
+        const year = parseInt(dateParts[2], 10);
         if(month == refMonth && year == refYear) {
-            refColumn = i;
-            break;
+            return i;
         }
     }
-    if(refColumn == 0) {
-        throw new Error(`ERRO: Período de referência ${refMonth}/${refYear} não encontrado na planilha`);
+    return -1;
+}
+
+function addPeriodColumns(initiatives, monthsToAdd, refYear) {
+    for(const month of monthsToAdd) {
+        const headerLabel = `01/${String(month).padStart(2, '0')}/${refYear}`;
+        initiatives[HEADER_ROW].push(headerLabel);
+        for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
+            initiatives[i].push('');
+        }
     }
-    return refColumn;
 }
