@@ -201,26 +201,74 @@ function nextMonth(period) {
     return { month, year: period.year };
 }
 
-function parseInitiativesCsv(filePath) {
+function parseInitiativesCsv(filePath, startPeriod, endPeriod) {
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
     if (lines.length === 0) {
         throw new Error('Arquivo de iniciativas vazio');
     }
     const headers = lines[0].split(';').map(item => item.trim());
-    const monthHeaders = headers.slice(3).map(formatMonthHeader);
+    const rawMonthHeaders = headers.slice(3);
+    const monthMeta = rawMonthHeaders.map((value, index) => {
+        const match = /^01\/(0[1-9]|1[0-2])\/(20\d{2})$/.exec(String(value).trim());
+        if (!match) {
+            return { index, month: null, year: null };
+        }
+        return { index, month: parseInt(match[1], 10), year: parseInt(match[2], 10) };
+    });
+
+    const filteredIndexes = monthMeta
+        .filter(meta => meta.month !== null)
+        .filter(meta => {
+            const afterStart = meta.year > startPeriod.year || (meta.year === startPeriod.year && meta.month >= startPeriod.month);
+            const beforeEnd = meta.year < endPeriod.year || (meta.year === endPeriod.year && meta.month <= endPeriod.month);
+            return afterStart && beforeEnd;
+        })
+        .map(meta => meta.index);
+
+    const monthHeaders = filteredIndexes.map(index => formatMonthHeader(rawMonthHeaders[index]));
+    const rows = [];
+    let lastInitiative = '';
+    let lastResponsibles = '';
+    for (let i = 1; i < lines.length; i += 1) {
+        const cols = lines[i].split(';');
+        const initiativeRaw = (cols[1] || '').trim();
+        const initiativeKey = initiativeRaw || lastInitiative;
+        if (initiativeRaw) {
+            lastInitiative = initiativeRaw;
+        }
+        const responsiblesRaw = (cols[2] || '').trim();
+        const responsibles = responsiblesRaw || lastResponsibles;
+        if (responsiblesRaw) {
+            lastResponsibles = responsiblesRaw;
+        }
+        const valuesRaw = cols.slice(3).map(value => (value || '').trim());
+        const values = filteredIndexes.map(index => valuesRaw[index] ?? '');
+        if (!initiativeKey && !responsibles) {
+            continue;
+        }
+        rows.push({ initiative: initiativeKey, responsibles, values });
+    }
+    return { monthHeaders, rows };
+}
+
+function parseIncidentsCsv(filePath) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length === 0) {
+        return [];
+    }
     const rows = [];
     for (let i = 1; i < lines.length; i += 1) {
         const cols = lines[i].split(';');
-        const initiative = (cols[1] || '').trim();
-        const responsibles = (cols[2] || '').trim();
-        const values = cols.slice(3).map(value => (value || '').trim());
-        if (!initiative && !responsibles) {
+        const title = (cols[1] || '').trim();
+        const daysOpen = (cols[4] || '').trim();
+        if (!title) {
             continue;
         }
-        rows.push({ initiative, responsibles, values });
+        rows.push({ title, daysOpen });
     }
-    return { monthHeaders, rows };
+    return rows;
 }
 
 function getInitiativeCellClass(value) {
@@ -236,7 +284,21 @@ function getInitiativeCellClass(value) {
     }
 }
 
-function buildHtml({ rows, initiatives }) {
+function buildRowspans(items) {
+    const rowspans = new Array(items.length).fill(0);
+    let i = 0;
+    while (i < items.length) {
+        let j = i + 1;
+        while (j < items.length && items[j] === items[i]) {
+            j += 1;
+        }
+        rowspans[i] = j - i;
+        i = j;
+    }
+    return rowspans;
+}
+
+function buildHtml({ rows, initiatives, incidents }) {
     const productionHeader = ORG_ORDER.map(org => `<th>${org.label}</th>`).join('');
     const topRows = rows.map(row => {
         const productionValues = ORG_ORDER.map(org => {
@@ -271,16 +333,25 @@ function buildHtml({ rows, initiatives }) {
     const initiativesSection = initiatives
         ? (() => {
             const { monthHeaders, rows: initiativeRows } = initiatives;
+            const initiativeRowspans = buildRowspans(initiativeRows.map(row => row.initiative));
+            const responsiblesRowspans = buildRowspans(initiativeRows.map(row => row.responsibles));
             const headerCells = monthHeaders.map(header => `<th>${header}</th>`).join('');
-            const bodyRows = initiativeRows.map(row => {
+            const bodyRows = initiativeRows.map((row, index) => {
                 const cells = row.values.map(value => {
                     const cellClass = getInitiativeCellClass(value);
                     return `<td class="${cellClass}"></td>`;
                 }).join('');
+
+                const initiativeCell = initiativeRowspans[index]
+                    ? `<td rowspan="${initiativeRowspans[index]}">${row.initiative}</td>`
+                    : '';
+                const responsiblesCell = responsiblesRowspans[index]
+                    ? `<td rowspan="${responsiblesRowspans[index]}">${row.responsibles}</td>`
+                    : '';
                 return `
                 <tr>
-                    <td>${row.initiative}</td>
-                    <td>${row.responsibles}</td>
+                    ${initiativeCell}
+                    ${responsiblesCell}
                     ${cells}
                 </tr>`;
             }).join('');
@@ -293,6 +364,34 @@ function buildHtml({ rows, initiatives }) {
                     <th>Iniciativa</th>
                     <th>Responsaveis</th>
                     ${headerCells}
+                </tr>
+            </thead>
+            <tbody>
+                ${bodyRows}
+            </tbody>
+        </table>
+    </div>`;
+        })()
+        : '';
+
+    const incidentsSection = incidents && incidents.items.length > 0
+        ? (() => {
+            const bodyRows = incidents.items.map(item => {
+                return `
+                <tr>
+                    <td>${incidents.monthLabel}</td>
+                    <td>${item.title}</td>
+                    <td>${item.daysOpen}</td>
+                </tr>`;
+            }).join('');
+            return `
+    <div class="table-wrap">
+        <table class="table-incidents">
+            <thead>
+                <tr>
+                    <th>Mes</th>
+                    <th>Descricao</th>
+                    <th>Dias aberto</th>
                 </tr>
             </thead>
             <tbody>
@@ -320,8 +419,8 @@ function buildHtml({ rows, initiatives }) {
     }
     table {
         border-collapse: collapse;
-        width: 100%;
-        max-width: 1200px;
+        width: auto;
+        table-layout: auto;
         margin: 0 auto;
     }
     thead tr:first-child th {
@@ -344,6 +443,7 @@ function buildHtml({ rows, initiatives }) {
         text-align: center;
         border: 1px solid #d1d5db;
         font-size: 13px;
+        white-space: nowrap;
     }
     tbody tr:nth-child(even) {
         background: #f3f4f6;
@@ -354,14 +454,10 @@ function buildHtml({ rows, initiatives }) {
         font-weight: 600;
         margin-bottom: 8px;
     }
-    .table-initiatives th:first-child,
-    .table-initiatives td:first-child {
-        text-align: left;
-        min-width: 200px;
-    }
-    .table-initiatives th:nth-child(2),
-    .table-initiatives td:nth-child(2) {
-        min-width: 140px;
+    .table-initiatives th,
+    .table-initiatives td {
+        text-align: center;
+        vertical-align: middle;
     }
     .table-initiatives td {
         height: 24px;
@@ -377,6 +473,10 @@ function buildHtml({ rows, initiatives }) {
     }
     .status-empty {
         background: #ffffff;
+    }
+    .table-incidents th:nth-child(2),
+    .table-incidents td:nth-child(2) {
+        text-align: left;
     }
 </style>
 </head>
@@ -427,13 +527,14 @@ function buildHtml({ rows, initiatives }) {
         </table>
     </div>
 ${initiativesSection}
+${incidentsSection}
 </body>
 </html>`;
 }
 
 function main() {
-    if (process.argv.length !== 4 && process.argv.length !== 5) {
-        throw new Error('Uso: node Blocks/block-report.js <mes-inicial/MM/AAAA> <mes-final/MM/AAAA> [arquivo_iniciativas]');
+    if (process.argv.length !== 4 && process.argv.length !== 5 && process.argv.length !== 6) {
+        throw new Error('Uso: node Blocks/block-report.js <mes-inicial/MM/AAAA> <mes-final/MM/AAAA> [arquivo_iniciativas] [arquivo_incidentes]');
     }
 
     const startPeriod = parsePeriod(process.argv[2]);
@@ -520,10 +621,21 @@ function main() {
         if (!fs.existsSync(initiativesPath)) {
             throw new Error(`Arquivo de iniciativas nao encontrado: ${initiativesPath}`);
         }
-        initiativesData = parseInitiativesCsv(initiativesPath);
+        initiativesData = parseInitiativesCsv(initiativesPath, startPeriod, endPeriod);
     }
 
-    const html = buildHtml({ rows, initiatives: initiativesData });
+    let incidentsData = null;
+    const incidentsPath = process.argv[5];
+    if (incidentsPath) {
+        if (!fs.existsSync(incidentsPath)) {
+            throw new Error(`Arquivo de incidentes nao encontrado: ${incidentsPath}`);
+        }
+        const items = parseIncidentsCsv(incidentsPath);
+        const monthLabel = `${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][endPeriod.month - 1]}/${String(endPeriod.year).slice(-2)}`;
+        incidentsData = { monthLabel, items };
+    }
+
+    const html = buildHtml({ rows, initiatives: initiativesData, incidents: incidentsData });
 
     if (!fs.existsSync(RESULT_DIR)) {
         fs.mkdirSync(RESULT_DIR, { recursive: true });

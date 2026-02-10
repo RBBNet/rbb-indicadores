@@ -549,12 +549,19 @@ async function blockHtmlReport() {
     console.log('\n--- Geracao de HTML de Blocos ---\n');
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const defaultPeriod = `${String(lastMonth.getMonth() + 1).padStart(2, '0')}/${lastMonth.getFullYear()}`;
-    const startPeriod = await questionWithDefault('Digite o periodo inicial (MM/AAAA)', defaultPeriod);
-    const endPeriod = await questionWithDefault('Digite o periodo final (MM/AAAA)', defaultPeriod);
+    const defaultEndPeriod = `${String(lastMonth.getMonth() + 1).padStart(2, '0')}/${lastMonth.getFullYear()}`;
+    const currentMonth = now.getMonth() + 1;
+    const defaultStartMonth = currentMonth <= 6 ? 7 : 1;
+    const defaultStartYear = currentMonth <= 6 ? now.getFullYear() - 1 : now.getFullYear();
+    const defaultStartPeriod = `${String(defaultStartMonth).padStart(2, '0')}/${defaultStartYear}`;
+    const startPeriod = await questionWithDefault('Digite o periodo inicial (MM/AAAA)', defaultStartPeriod);
+    const endPeriod = await questionWithDefault('Digite o periodo final (MM/AAAA)', defaultEndPeriod);
     const resultDir = path.join(__dirname, 'result');
     const initiativePattern = /^Iniciativas_\d{4}-\d{2}\.csv$/i;
     let initiativesFile = null;
+    const incidentsFile = fs.existsSync(path.join(resultDir, 'Incidentes.csv'))
+        ? path.join(resultDir, 'Incidentes.csv')
+        : null;
 
     if (fs.existsSync(resultDir)) {
         const files = fs.readdirSync(resultDir).filter(file => initiativePattern.test(file));
@@ -580,7 +587,8 @@ async function blockHtmlReport() {
         await runNode(path.join(__dirname, 'Blocks', 'block-report.js'), [
             startPeriod,
             endPeriod,
-            ...(initiativesFile ? [initiativesFile] : [])
+            ...(initiativesFile ? [initiativesFile] : []),
+            ...(incidentsFile ? [incidentsFile] : [])
         ]);
         console.log('\nHTML gerado em: result\\Indicadores.html');
     } catch (error) {
