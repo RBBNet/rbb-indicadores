@@ -336,10 +336,11 @@ async function showMenu() {
     console.log('2. Estatisticas do Tempo de Producao de Blocos');
     console.log('3. Acompanhamento das Iniciativas de Maturacao do Piloto');
     console.log('4. Issues em Producao');
-    console.log('5. Sair');
+    console.log('5. Gerar HTML de Blocos');
+    console.log('6. Sair');
     console.log('==========================================');
     
-    const choice = await question('Escolha uma opcao (1-5): ');
+    const choice = await question('Escolha uma opcao (1-6): ');
     
     try {
         switch (choice.trim()) {
@@ -356,6 +357,9 @@ async function showMenu() {
                 await issueMetrics();
                 break;
             case '5':
+                await blockHtmlReport();
+                break;
+            case '6':
                 console.log('Saindo...');
                 rl.close();
                 process.exit(0);
@@ -537,6 +541,51 @@ async function blockAnalytics() {
         console.log(`ERRO: ${error.message}`);
     }
     
+    await pause();
+}
+
+// Opção 5: Gerar HTML de Blocos
+async function blockHtmlReport() {
+    console.log('\n--- Geracao de HTML de Blocos ---\n');
+    const now = new Date();
+    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const defaultPeriod = `${String(lastMonth.getMonth() + 1).padStart(2, '0')}/${lastMonth.getFullYear()}`;
+    const startPeriod = await questionWithDefault('Digite o periodo inicial (MM/AAAA)', defaultPeriod);
+    const endPeriod = await questionWithDefault('Digite o periodo final (MM/AAAA)', defaultPeriod);
+    const resultDir = path.join(__dirname, 'result');
+    const initiativePattern = /^Iniciativas_\d{4}-\d{2}\.csv$/i;
+    let initiativesFile = null;
+
+    if (fs.existsSync(resultDir)) {
+        const files = fs.readdirSync(resultDir).filter(file => initiativePattern.test(file));
+        if (files.length === 0) {
+            console.log('Aviso: nenhum arquivo de iniciativas encontrado em result.');
+        } else if (files.length === 1) {
+            initiativesFile = path.join(resultDir, files[0]);
+        } else {
+            console.log('\nArquivos de iniciativas encontrados:');
+            files.forEach((file, index) => {
+                console.log(`${index + 1}. ${file}`);
+            });
+            const choice = await question('Escolha o arquivo de iniciativas (numero): ');
+            const idx = parseInt(choice.trim(), 10) - 1;
+            if (!Number.isNaN(idx) && idx >= 0 && idx < files.length) {
+                initiativesFile = path.join(resultDir, files[idx]);
+            } else {
+                console.log('Opcao invalida. Continuando sem iniciativas.');
+            }
+        }
+    }
+    try {
+        await runNode(path.join(__dirname, 'Blocks', 'block-report.js'), [
+            startPeriod,
+            endPeriod,
+            ...(initiativesFile ? [initiativesFile] : [])
+        ]);
+        console.log('\nHTML gerado em: result\\Indicadores.html');
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+    }
     await pause();
 }
 

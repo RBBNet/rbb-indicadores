@@ -8,9 +8,10 @@ while true; do
     echo "2. Estatísticas do Tempo de Produção de Blocos"
     echo "3. Acompanhamento das Iniciativas de Maturação do Piloto"
     echo "4. Issues em Produção"
-    echo "5. Sair"
+    echo "5. Gerar HTML de Blocos"
+    echo "6. Sair"
     echo "=========================================="
-    read -p "Escolha uma opção (1-5): " choice
+    read -p "Escolha uma opção (1-6): " choice
 
     case $choice in
         1)
@@ -41,6 +42,12 @@ while true; do
             read -p "Pressione qualquer tecla para continuar..."
             ;;
         5)
+            read -p "Digite o periodo inicial (MM/AAAA): " startPeriod
+            read -p "Digite o periodo final (MM/AAAA): " endPeriod
+            node Blocks/block-report.js $startPeriod $endPeriod
+            read -p "Pressione qualquer tecla para continuar..."
+            ;;
+        6)
             echo "Saindo..."
             break
             ;;

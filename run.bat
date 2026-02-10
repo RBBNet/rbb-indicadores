@@ -8,15 +8,17 @@ echo 1. Metricas de Producao de Blocos
 echo 2. Estatisticas do Tempo de Producao de Blocos
 echo 3. Acompanhamento das Iniciativas de Maturacao do Piloto
 echo 4. Issues em Producao
-echo 5. Sair
+echo 5. Gerar HTML de Blocos
+echo 6. Sair
 echo ==========================================
-set /p choice=Escolha uma opcao (1-5): 
+set /p choice=Escolha uma opcao (1-6): 
 
 if %choice%==1 goto blockMetrics
 if %choice%==2 goto blockAnalytics
 if %choice%==3 goto projectMetrics
 if %choice%==4 goto issueMetrics
-if %choice%==5 goto end
+if %choice%==5 goto blockReport
+if %choice%==6 goto end
 
 :blockMetrics
 set /p startDate=Digite a data inicial (DD/MM/AAAA): 
@@ -28,19 +30,16 @@ pause
 goto menu
 
 :blockAnalytics
+echo.
+echo --- Estatisticas do Tempo de Producao de Blocos ---
+echo.
 set /p refMonth=Digite o mes de referencia (MM): 
 set /p refYear=Digite o ano de referencia (AAAA): 
 set defaultPath=\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\%refYear%-%refMonth%\blocks%refYear%-%refMonth%.csv
 echo.
-echo Caminho padrao sugerido:
-echo %defaultPath%
-echo.
-set /p useDefault=Deseja usar este caminho? (S/N): 
-if /i "%useDefault%"=="S" (
-    set blocksPath=%defaultPath%
-) else (
-    set /p blocksPath=Digite o caminho completo do arquivo CSV de blocos: 
-)
+set "blocksPath=%defaultPath%"
+set /p "blocksPath=Arquivo de blocos [%defaultPath%]: "
+if "%blocksPath%"=="" set "blocksPath=%defaultPath%"
 
 echo.
 echo Verificando se o arquivo existe...
@@ -87,6 +86,16 @@ goto menu
 set /p startDate=Digite a data inicial (DD/MM/AAAA): 
 set /p endDate=Digite a data final (DD/MM/AAAA): 
 node Issues\issue-metrics.js %startDate% %endDate%
+pause
+goto menu
+
+:blockReport
+echo.
+echo --- Geracao de HTML de Blocos ---
+echo.
+set /p startPeriod=Digite o periodo inicial (MM/AAAA): 
+set /p endPeriod=Digite o periodo final (MM/AAAA): 
+node Blocks\block-report.js %startPeriod% %endPeriod%
 pause
 goto menu
 
