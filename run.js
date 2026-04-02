@@ -101,6 +101,22 @@ try {
     console.warn('Aviso: Nao foi possivel carregar config.json');
 }
 
+// Configuracao de ambientes SSH via config.json
+const sshConfig = config.SSH || {};
+
+function getSshEnvironmentConfig(envName) {
+    const envConfig = sshConfig[envName];
+    if (!envConfig) {
+        return null;
+    }
+
+    return {
+        remoteHost: envConfig.REMOTE_HOST,
+        remotePort: String(envConfig.REMOTE_PORT || '8545'),
+        sshHost: envConfig.SSH_HOST
+    };
+}
+
 // Helper: baixar arquivo via HTTPS e salvar localmente
 import https from 'https';
 import { HttpsProxyAgent } from 'https-proxy-agent';
@@ -394,8 +410,8 @@ async function blockMetrics() {
     
     // Configuração do túnel SSH
     console.log('\n--- Configuracao do Tunel SSH ---');
-    console.log('1. Lab (rbb-writer01.hom.bndes.net - 172.17.64.21)');
-    console.log('2. Prod (vrt2675.bndes.net - 172.17.64.34)');
+    console.log('1. Lab (configurado em config.json)');
+    console.log('2. Prod (configurado em config.json)');
     console.log('3. Customizado');
     
     const tunnelChoice = await question('Escolha o ambiente (1-3): ');
@@ -403,26 +419,47 @@ async function blockMetrics() {
     let remoteHost, remotePort, sshHost;
     
     switch (tunnelChoice.trim()) {
-        case '1':
-            remoteHost = '172.17.64.21';
-            remotePort = '8545';
-            sshHost = 'rbb-writer01.hom.bndes.net';
+        case '1': {
+            const labConfig = getSshEnvironmentConfig('LAB');
+            if (!labConfig?.remoteHost || !labConfig?.sshHost) {
+                console.log('ERRO: Configure SSH.LAB.REMOTE_HOST e SSH.LAB.SSH_HOST no config.json.');
+                await pause();
+                return;
+            }
+            remoteHost = labConfig.remoteHost;
+            remotePort = labConfig.remotePort;
+            sshHost = labConfig.sshHost;
             break;
-        case '2':
-            remoteHost = '172.17.64.34';
-            remotePort = '8545';
-            sshHost = 'vrt2675.bndes.net';
+        }
+        case '2': {
+            const prodConfig = getSshEnvironmentConfig('PROD');
+            if (!prodConfig?.remoteHost || !prodConfig?.sshHost) {
+                console.log('ERRO: Configure SSH.PROD.REMOTE_HOST e SSH.PROD.SSH_HOST no config.json.');
+                await pause();
+                return;
+            }
+            remoteHost = prodConfig.remoteHost;
+            remotePort = prodConfig.remotePort;
+            sshHost = prodConfig.sshHost;
             break;
+        }
         case '3':
             remoteHost = await question('Digite o IP remoto: ');
             remotePort = await questionWithDefault('Digite a porta remota', '8545');
             sshHost = await question('Digite o host SSH: ');
             break;
-        default:
-            console.log('Opcao invalida! Usando Lab como padrao.');
-            remoteHost = '172.17.64.21';
-            remotePort = '8545';
-            sshHost = 'rbb-writer01.hom.bndes.net';
+        default: {
+            const defaultLabConfig = getSshEnvironmentConfig('LAB');
+            if (!defaultLabConfig?.remoteHost || !defaultLabConfig?.sshHost) {
+                console.log('Opcao invalida e SSH.LAB nao configurado no config.json.');
+                await pause();
+                return;
+            }
+            console.log('Opcao invalida! Usando Lab configurado no config.json.');
+            remoteHost = defaultLabConfig.remoteHost;
+            remotePort = defaultLabConfig.remotePort;
+            sshHost = defaultLabConfig.sshHost;
+        }
     }
     
     // Obter username do sistema ou perguntar

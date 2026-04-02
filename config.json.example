@@ -1,0 +1,18 @@
+{
+  "GITHUB_RBB_TOKEN": "<github_api_token>",
+  "PROXY_URL": "http://host:port",
+  "ORG": "<organization_name>",
+  "PROJECT_NUMBER": 1,
+  "SSH": {
+    "LAB": {
+      "REMOTE_HOST": "<lab_remote_ip_or_host>",
+      "REMOTE_PORT": "8545",
+      "SSH_HOST": "<lab_ssh_host>"
+    },
+    "PROD": {
+      "REMOTE_HOST": "<prod_remote_ip_or_host>",
+      "REMOTE_PORT": "8545",
+      "SSH_HOST": "<prod_ssh_host>"
+    }
+  }
+}

@@ -10,8 +10,21 @@ As ferramentas possuem os seguintes requisitos em comum:
 
 - **NodeJS** na versão **22.11**
 - **NPM** na versão **10.9.0**
-- Arquivo **config.json**, que deve ser criado na pasta raiz deste projeto, com os seguintes parâmetros:
+- Arquivo **config.json**, que deve ser criado na pasta raiz deste projeto a partir de **config.json.example**:
+
+```bash
+cp config.json.example config.json
+```
+
+No Windows (PowerShell):
+
+```powershell
+Copy-Item config.json.example config.json
+```
+
+Após criar o arquivo, preencha os seguintes parâmetros:
   - Não havendo proxy, pode-se criar o arquivo sem o parâmetro `PROXY_URL`
+  - Para a opção de métricas de blocos com túnel SSH (Lab/Prod), preencha também `SSH.LAB` e `SSH.PROD`
   - O token do GitHub deve ter os seguintes escopos para acesso aos repositórios privados:
     - **`repo`** (acesso completo a repositórios privados)
     - **`read:project`** (leitura de projetos)
@@ -21,7 +34,19 @@ As ferramentas possuem os seguintes requisitos em comum:
     "GITHUB_RBB_TOKEN":"<github_api_token>",
     "PROXY_URL": "http://host:port",
     "ORG": "<organization_name>",
-    "PROJECT_NUMBER": <project_number>
+  "PROJECT_NUMBER": <project_number>,
+  "SSH": {
+    "LAB": {
+      "REMOTE_HOST": "<lab_remote_ip_or_host>",
+      "REMOTE_PORT": "8545",
+      "SSH_HOST": "<lab_ssh_host>"
+    },
+    "PROD": {
+      "REMOTE_HOST": "<prod_remote_ip_or_host>",
+      "REMOTE_PORT": "8545",
+      "SSH_HOST": "<prod_ssh_host>"
+    }
+  }
 }
 ```
 
@@ -96,8 +121,8 @@ O menu interativo permite escolher entre as seguintes opções:
 1. **Métricas de Produção de Blocos**: Gera indicadores sobre a produção de blocos.
    - **Túnel SSH Automático**: Esta opção automaticamente estabelece um túnel SSH para o nó da RBB antes de coletar métricas.
    - Você pode escolher entre:
-     - **Lab** (rbb-writer01.hom.bndes.net - 172.17.64.21)
-     - **Prod** (vrt2675.bndes.net - 172.17.64.34)
+     - **Lab** (definido no `config.json`)
+     - **Prod** (definido no `config.json`)
      - **Customizado** (especificar manualmente IP, porta e host SSH)
    - O túnel é automaticamente encerrado após a coleta de dados.
    - Requer acesso SSH aos servidores da RBB.
