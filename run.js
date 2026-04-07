@@ -5,6 +5,8 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { ethers } from 'ethers';
+import EthDater from 'ethereum-block-by-date';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +70,58 @@ function runNode(scriptPath, args = []) {
             reject(err);
         });
     });
+}
+
+// Função para executar comando externo (python, ethereumetl, etc.)
+function runCommand(command, args = []) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(command, args, {
+            stdio: 'inherit',
+            shell: true
+        });
+
+        child.on('close', (code) => {
+            if (code !== 0) {
+                reject(new Error(`Comando encerrado com código ${code}: ${command}`));
+            } else {
+                resolve();
+            }
+        });
+
+        child.on('error', (err) => {
+            reject(err);
+        });
+    });
+}
+
+function parseDateToUTC3(dateString) {
+    const parts = dateString.split('/');
+    if (parts.length !== 3) {
+        throw new Error(`Data inválida: ${dateString}. Use DD/MM/AAAA.`);
+    }
+
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    const year = parseInt(parts[2], 10);
+
+    if (Number.isNaN(day) || Number.isNaN(month) || Number.isNaN(year)) {
+        throw new Error(`Data inválida: ${dateString}. Use DD/MM/AAAA.`);
+    }
+
+    const date = new Date(Date.UTC(year, month - 1, day, 3, 0, 0, 0));
+    if (
+        date.getUTCFullYear() !== year ||
+        date.getUTCMonth() !== month - 1 ||
+        date.getUTCDate() !== day
+    ) {
+        throw new Error(`Data inválida: ${dateString}.`);
+    }
+
+    return date;
+}
+
+function addDays(date, days) {
+    return new Date(date.getTime() + days * 86400000);
 }
 
 // Função para copiar arquivo
@@ -348,34 +402,38 @@ async function showMenu() {
     console.log('==========================================');
     console.log('         Menu de Ferramentas RBB');
     console.log('==========================================');
-    console.log('1. Metricas de Producao de Blocos');
-    console.log('2. Estatisticas do Tempo de Producao de Blocos');
-    console.log('3. Acompanhamento das Iniciativas de Maturacao do Piloto');
-    console.log('4. Issues em Producao');
-    console.log('5. Gerar HTML de Blocos');
-    console.log('6. Sair');
+    console.log('1. Exportar Blocos (ethereum-etl)');
+    console.log('2. Metricas de Producao de Blocos');
+    console.log('3. Estatisticas do Tempo de Producao de Blocos');
+    console.log('4. Acompanhamento das Iniciativas de Maturacao do Piloto');
+    console.log('5. Issues em Producao');
+    console.log('6. Gerar HTML de Blocos');
+    console.log('7. Sair');
     console.log('==========================================');
     
-    const choice = await question('Escolha uma opcao (1-6): ');
+    const choice = await question('Escolha uma opcao (1-7): ');
     
     try {
         switch (choice.trim()) {
             case '1':
-                await blockMetrics();
+                await exportBlocksWithEthereumEtl();
                 break;
             case '2':
-                await blockAnalytics();
+                await blockMetrics();
                 break;
             case '3':
-                await projectMetrics();
+                await blockAnalytics();
                 break;
             case '4':
-                await issueMetrics();
+                await projectMetrics();
                 break;
             case '5':
-                await blockHtmlReport();
+                await issueMetrics();
                 break;
             case '6':
+                await blockHtmlReport();
+                break;
+            case '7':
                 console.log('Saindo...');
                 rl.close();
                 process.exit(0);
@@ -712,6 +770,145 @@ async function issueMetrics() {
         output: process.stdout
     });
     
+    await pause();
+}
+
+// Opção 6: Exportar blocos com ethereum-etl
+async function exportBlocksWithEthereumEtl() {
+    console.log('\n--- Exportacao de Blocos (ethereum-etl) ---\n');
+
+    const now = new Date();
+    const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    const defaultStartDate = `${String(firstDayLastMonth.getDate()).padStart(2, '0')}/${String(firstDayLastMonth.getMonth() + 1).padStart(2, '0')}/${firstDayLastMonth.getFullYear()}`;
+    const defaultEndDate = `${String(lastDayLastMonth.getDate()).padStart(2, '0')}/${String(lastDayLastMonth.getMonth() + 1).padStart(2, '0')}/${lastDayLastMonth.getFullYear()}`;
+
+    const startDateInput = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaultStartDate);
+    const endDateInput = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaultEndDate);
+
+    let startDate;
+    let endDate;
+    try {
+        startDate = parseDateToUTC3(startDateInput);
+        endDate = parseDateToUTC3(endDateInput);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    if (endDate < startDate) {
+        console.log('ERRO: A data final deve ser maior ou igual à data inicial.');
+        await pause();
+        return;
+    }
+
+    // Configuração do túnel SSH
+    console.log('\n--- Configuracao do Tunel SSH ---');
+    console.log('1. Lab (configurado em config.json)');
+    console.log('2. Prod (configurado em config.json)');
+    console.log('3. Customizado');
+
+    const tunnelChoice = await question('Escolha o ambiente (1-3): ');
+
+    let remoteHost, remotePort, sshHost;
+
+    switch (tunnelChoice.trim()) {
+        case '1': {
+            const labConfig = getSshEnvironmentConfig('LAB');
+            if (!labConfig?.remoteHost || !labConfig?.sshHost) {
+                console.log('ERRO: Configure SSH.LAB.REMOTE_HOST e SSH.LAB.SSH_HOST no config.json.');
+                await pause();
+                return;
+            }
+            remoteHost = labConfig.remoteHost;
+            remotePort = labConfig.remotePort;
+            sshHost = labConfig.sshHost;
+            break;
+        }
+        case '2': {
+            const prodConfig = getSshEnvironmentConfig('PROD');
+            if (!prodConfig?.remoteHost || !prodConfig?.sshHost) {
+                console.log('ERRO: Configure SSH.PROD.REMOTE_HOST e SSH.PROD.SSH_HOST no config.json.');
+                await pause();
+                return;
+            }
+            remoteHost = prodConfig.remoteHost;
+            remotePort = prodConfig.remotePort;
+            sshHost = prodConfig.sshHost;
+            break;
+        }
+        case '3':
+            remoteHost = await question('Digite o IP remoto: ');
+            remotePort = await questionWithDefault('Digite a porta remota', '8545');
+            sshHost = await question('Digite o host SSH: ');
+            break;
+        default: {
+            const defaultLabConfig = getSshEnvironmentConfig('LAB');
+            if (!defaultLabConfig?.remoteHost || !defaultLabConfig?.sshHost) {
+                console.log('Opcao invalida e SSH.LAB nao configurado no config.json.');
+                await pause();
+                return;
+            }
+            console.log('Opcao invalida! Usando Lab configurado no config.json.');
+            remoteHost = defaultLabConfig.remoteHost;
+            remotePort = defaultLabConfig.remotePort;
+            sshHost = defaultLabConfig.sshHost;
+        }
+    }
+
+    const defaultUsername = process.env.USERNAME || process.env.USER || '';
+    const username = await questionWithDefault('Usuario SSH', defaultUsername);
+
+    const providerUri = 'http://127.0.0.1:8545';
+    const resultDir = path.join(__dirname, 'result');
+    const outputDir = path.join(resultDir, 'blocos');
+    ensureDir(outputDir);
+
+    try {
+        await createSSHTunnel(remoteHost, remotePort, username, sshHost);
+        console.log('Aguardando estabilizacao do tunel...');
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        const provider = new ethers.JsonRpcProvider(providerUri);
+        console.log('\nVerificando conectividade com o provider local...');
+        await provider.getBlockNumber();
+
+        const dater = new EthDater(provider);
+        const startBlockData = await dater.getDate(startDate, true, false);
+        const endExclusiveDate = addDays(endDate, 1);
+        const endBlockData = await dater.getDate(endExclusiveDate, true, false);
+
+        const startBlock = startBlockData.block;
+        const endBlock = endBlockData.block - 1;
+
+        if (endBlock < startBlock) {
+            throw new Error('Intervalo de blocos inválido calculado a partir das datas informadas.');
+        }
+
+        console.log(`\nBloco inicial: ${startBlock}`);
+        console.log(`Bloco final: ${endBlock}`);
+        console.log(`Diretorio de saida: ${outputDir}\n`);
+
+        await runCommand('ethereumetl', [
+            'export_all',
+            '--start', String(startBlock),
+            '--end', String(endBlock),
+            '--partition-batch-size', '6000000',
+            '--provider-uri', providerUri,
+            '--output-dir', outputDir
+        ]);
+
+        console.log('\nExportacao concluida com sucesso!');
+        console.log(`Arquivos salvos em: ${outputDir}`);
+    } catch (error) {
+        console.log(`\nERRO: ${error.message}`);
+        console.log('Verifique suas credenciais SSH, conectividade e se o pacote ethereum-etl está instalado.');
+    } finally {
+        closeSSHTunnel();
+    }
+
     await pause();
 }
 
