@@ -96,7 +96,7 @@ Quantil 99%: xxxx s
 
 ### Saída via Menu Interativo
 
-Ao executar através do menu interativo (`run.bat`), o processo é facilitado:
+Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o processo é facilitado:
 
 1. O script solicita o mês (MM) e ano (AAAA) de referência
 2. Sugere automaticamente o caminho padrão na rede: `\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\AAAA-MM\blocksAAAA-MM.csv`

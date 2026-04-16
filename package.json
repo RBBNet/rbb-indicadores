@@ -9,6 +9,8 @@
   },
   "scripts": {
     "menu": "node run.js",
+    "menu:operacao": "node run-operacao.js",
+    "menu:evolucao": "node run-evolucao.js",
     "postinstall": "node -e \"const { spawnSync } = require('child_process'); const attempts = [['python', ['-m', 'pip', 'install', 'ethereum-etl']], ['py', ['-m', 'pip', 'install', 'ethereum-etl']]]; let ok = false; for (const [cmd, args] of attempts) { const res = spawnSync(cmd, args, { stdio: 'inherit' }); if (!res.error && res.status === 0) { ok = true; break; } } if (!ok) { console.error('Falha ao instalar ethereum-etl automaticamente. Rode manualmente: python -m pip install ethereum-etl'); process.exit(1); }\""
   },
   "dependencies": {

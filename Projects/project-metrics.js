@@ -36,6 +36,27 @@ function question(query) {
     return new Promise(resolve => rl.question(query, resolve));
 }
 
+function logStage(current, total, label) {
+    console.log(`\n[Etapa ${current}/${total}] ${label}`);
+}
+
+function formatElapsedMs(elapsedMs) {
+    const totalSeconds = Math.floor(elapsedMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    if (minutes === 0) {
+        return `${seconds}s`;
+    }
+    return `${minutes}min ${String(seconds).padStart(2, '0')}s`;
+}
+
+function startProgressHeartbeat(label, intervalMs = 15000) {
+    const startedAt = Date.now();
+    return setInterval(() => {
+        console.log(`${label}... ${formatElapsedMs(Date.now() - startedAt)}`);
+    }, intervalMs);
+}
+
 // Função para gerenciar iniciativas ANTES de buscar do GitHub (mais rápido)
 async function manageInitiativesBeforeFetch(initiatives) {
     let continueManaging = true;
@@ -207,6 +228,7 @@ async function validateNewInitiatives(initiatives, activeIssues) {
 main();
 
 async function main() {
+    const totalStages = 5;
 
     if(process.argv.length != 4){
         console.error('ERRO: Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>\n');
@@ -248,6 +270,7 @@ async function main() {
 
     console.log(`Atualizando andamento de iniciativas para o período ${refMonth}/${refYear}\n`);
     console.log(`Carregando arquivo ${initiativesFileName} com iniciativas...\n`);
+    logStage(1, totalStages, 'Carregando e validando arquivo de iniciativas');
 
     let initiatives = await loadInitiatives(initiativesFileName);
     // Descobre a coluna do CSV que corresponde ao período de referência
@@ -294,11 +317,19 @@ async function main() {
     
     initiatives = await manageInitiativesBeforeFetch(initiatives);
     
+    logStage(2, totalStages, 'Consultando GitHub para obter issues e andamentos');
     console.log('Obtendo iniciativas de Maturação do Piloto do GitHub...\n');
     console.log('(Isso pode demorar alguns minutos...)\n');
-    const activeIssues = await getActiveIssues(refMonth, refYear);
+    const fetchHeartbeat = startProgressHeartbeat('Consulta ao GitHub em andamento', 15000);
+    let activeIssues;
+    try {
+        activeIssues = await getActiveIssues(refMonth, refYear);
+    } finally {
+        clearInterval(fetchHeartbeat);
+    }
     
     // Validar iniciativas incluídas após obter issues
+    logStage(3, totalStages, 'Validando iniciativas e gerando CSVs auxiliares');
     initiatives = await validateNewInitiatives(initiatives, activeIssues);
     if(activeIssues.length == 0) {
         console.error('ERRO: Nenhuma issue ativa encontrada.\n');
@@ -322,6 +353,7 @@ async function main() {
     }
     console.log();
 
+    logStage(4, totalStages, 'Atualizando status das iniciativas para o periodo');
     console.log(`Atualizando andamento das iniciativas...`);
     // Atualiza as iniciativas com andamento
     for(let i = FIRST_DATA_ROW; i < initiatives.length; ++i) {
@@ -360,6 +392,7 @@ async function main() {
     }
     console.log();
 
+    logStage(5, totalStages, 'Salvando arquivo consolidado de iniciativas');
     console.log('Gerando arquivos atualizado de iniciativas...');
     await writeCsv(RESULT_DIR, RESULT_FILE, initiatives);
     console.log();
@@ -385,8 +418,11 @@ async function getActiveIssues(refMonth, refYear) {
         throw new Error('ERRO: projectKanbamCards não é uma array');
     }
 
+    console.log(`Processando ${projectKanbamCards.length} itens retornados pelo GitHub...`);
+
     let activeIssues = [];
-    for(const card of projectKanbamCards){
+    for(let index = 0; index < projectKanbamCards.length; ++index){
+        const card = projectKanbamCards[index];
         const issue = helpers.cleanIssue(card.content);
         const timelineItems = await functions.fetchTimelineData(refMonth, refYear, issue.id)
         const timeline = helpers.cleanTimeLine(timelineItems,issue.issue_id);
@@ -397,6 +433,10 @@ async function getActiveIssues(refMonth, refYear) {
             "issue":issue,
             "timeline":timelineRefPeriod
         });
+
+        if ((index + 1) % 10 === 0 || index === projectKanbamCards.length - 1) {
+            console.log(` - Itens processados: ${index + 1}/${projectKanbamCards.length}`);
+        }
     }
 
     return activeIssues;

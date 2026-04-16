@@ -1,6 +1,23 @@
 import fs from 'fs';
 import { Octokit } from "@octokit/core";
-import { fetch , ProxyAgent } from 'undici';
+
+if (typeof String.prototype.toWellFormed !== 'function') {
+    String.prototype.toWellFormed = function toWellFormed() {
+        return String(this);
+    };
+}
+
+if (typeof String.prototype.isWellFormed !== 'function') {
+    String.prototype.isWellFormed = function isWellFormed() {
+        return true;
+    };
+}
+
+if (typeof globalThis.File === 'undefined') {
+    globalThis.File = class File {};
+}
+
+const { fetch, ProxyAgent } = await import('undici');
 
 const Config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const proxyurl = Config.PROXY_URL;
@@ -41,7 +58,7 @@ async function fetchIssues(params) {
             };
         });
     } catch (error) {
-        console.error(`Error ${error.status} while fetching issues:`, error);
+        console.error(`Error ${error.status || ''} ao buscar issues: ${error.message}`.trim());
     }
 }
 
@@ -69,7 +86,7 @@ async function getTokenOwner(){
         console.log(`\nRECUPERANDO ISSUES COM TOKEN DE PROPRIEDADE DE ${response.data.name} - @${response.data.login}`);
     })
     .catch(error => {
-        console.error('Error ao buscar dados do usuário:', error);
+        console.error(`Error ao buscar dados do usuario: ${error.message}`);
     }); 
 }
 

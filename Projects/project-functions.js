@@ -1,11 +1,35 @@
 import { Octokit } from "@octokit/core";
 import { paginateGraphQL } from "@octokit/plugin-paginate-graphql";
-import { fetch , ProxyAgent } from 'undici';
 import helpers from './helpers.js'
 
 import fs from 'fs';
+
+if (typeof String.prototype.toWellFormed !== 'function') {
+    String.prototype.toWellFormed = function toWellFormed() {
+        return String(this);
+    };
+}
+
+if (typeof String.prototype.isWellFormed !== 'function') {
+    String.prototype.isWellFormed = function isWellFormed() {
+        return true;
+    };
+}
+
+if (typeof globalThis.File === 'undefined') {
+    globalThis.File = class File {};
+}
+
+const { fetch, ProxyAgent } = await import('undici');
+
 const Config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 const proxyurl = Config.PROXY_URL;
+
+function formatGithubError(error, context) {
+    const status = error?.status ? `Error ${error.status}` : 'Error';
+    const message = error?.message || 'Falha desconhecida na chamada ao GitHub';
+    return `\n${status} em ${context}: ${message}`;
+}
 
 let octokit;
 if (proxyurl != null) {
@@ -58,19 +82,19 @@ async function fetchIssueTimelineData(repo, number, refYear, refMonth) {
     } 
     catch (error) {
         if(error.status == 404){
-            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if repository name and issue number are correct and accessible to you`);
+            console.error('\nError 404 ao buscar dados no GitHub: verifique se o repositorio e a issue existem e se voce tem acesso.');
             process.exit(1);
         }
         if(error.status == 401){
-            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if your Github API access token is correctly set up and with the necessary scopes\n ${error.message} \n ${error.request}` );
+            console.error(`\nError 401 ao buscar dados no GitHub: verifique o token e os escopos necessarios. ${error.message}`);
             process.exit(2);
         }
         if(error.status == 500){    
-            console.error(`\nError ${error.status} while fetching issue Data: ${error.request}`);
+            console.error(`\nError 500 ao buscar dados no GitHub: ${error.message}`);
             process.exit(3);
         }
         else{
-            console.error(`\nError ${error.status} while parsing issue Data: ${error.stack}`);
+            console.error(formatGithubError(error, 'parsing issue data'));
         }
     }
 }
@@ -126,19 +150,19 @@ async function fetchTimelineData(refMonth, refYear, issueID) {
     } 
     catch (error) {
         if(error.status == 404){
-            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if repository name and issue number are correct and accessible to you`);
+            console.error('\nError 404 ao buscar dados no GitHub: verifique se o item existe e se voce tem acesso.');
             process.exit(1);
         }
         if(error.status == 401){
-            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if your Github API access token is correctly set up and with the necessary scopes\n ${error.message} \n ${error.request}` );
+            console.error(`\nError 401 ao buscar dados no GitHub: verifique o token e os escopos necessarios. ${error.message}`);
             process.exit(2);
         }
         if(error.status == 500){    
-            console.error(`\nError ${error.status} while fetching issue Data: ${error}`);
+            console.error(`\nError 500 ao buscar dados no GitHub: ${error.message}`);
             process.exit(3);
         }
         else{
-            console.error(`\nError ${error.status} while parsing issue Data: ${error.stack}`);
+            console.error(formatGithubError(error, 'parsing issue data'));
         }
     }
 }
@@ -254,19 +278,19 @@ async function fetchProjectData(refMonth, refYear) {
     } 
     catch (error) {
         if(error.status == 404){
-            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if repository name and issue number are correct and accessible to you`);
+            console.error('\nError 404 ao buscar dados no GitHub: verifique se o projeto existe e se voce tem acesso.');
             process.exit(1);
         }
         if(error.status == 401){
-            console.error(`\nError ${error.status} while fetching issue Data:\n - Check if your Github API access token is correctly set up and with the necessary scopes\n ${error.message} \n ${error.request}` );
+            console.error(`\nError 401 ao buscar dados no GitHub: verifique o token e os escopos necessarios. ${error.message}`);
             process.exit(2);
         }
         if(error.status == 500){    
-            console.error(`\nError ${error.status} while fetching issue Data: ${error}`);
+            console.error(`\nError 500 ao buscar dados no GitHub: ${error.message}`);
             process.exit(3);
         }
         else{
-            console.error(`\nError ${error.status} while parsing issue Data: ${error.stack}`);
+            console.error(formatGithubError(error, 'parsing issue data'));
         }
     }
 }

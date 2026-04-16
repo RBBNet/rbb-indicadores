@@ -1,154 +1,117 @@
 # RBB Indicadores
 
-As ferramentas presentes nesse repositório servem de apoio à equipe da Rede Blockchain Brasil (RBB) para acompanhamento da operação e níveis de serviço da rede e evolução de atividades dos projetos do ecossistema.
+As ferramentas deste repositório apoiam a equipe da Rede Blockchain Brasil (RBB) no acompanhamento da operação da rede e da evolução das iniciativas do ecossistema.
 
-As ferramentas realizam consultas aos nós da RBB, para a coleta de índices de Produção de Blocos, e consultas à API do GitHub para acompanhamento de incidentes e progresso de atividades de projetos.
+O projeto foi separado em dois perfis de uso:
+
+- Operacao: foco em blocos, incidentes e exportacao tecnica.
+- Evolucao: foco em iniciativas e acompanhamento do andamento do projeto.
 
 ## Requisitos
 
-As ferramentas possuem os seguintes requisitos em comum:
-
-- **NodeJS** na versão **22.11**
-- **NPM** na versão **10.9.0**
-- **Python** com **pip** disponível no PATH (usado para instalar e executar `ethereum-etl`)
-- Arquivo **config.json**, que deve ser criado na pasta raiz deste projeto a partir de **config.json.example**:
+- Node.js 22.11
+- NPM 10.9.0
+- Python com pip no PATH
+- Arquivo `config.json`, criado a partir de `config.json.example`
 
 ```bash
-cp config.json.example config.json
+copy config.json.example config.json
 ```
 
-No Windows (PowerShell):
+Ou no PowerShell:
 
 ```powershell
 Copy-Item config.json.example config.json
 ```
 
-Após criar o arquivo, preencha os seguintes parâmetros:
-  - Não havendo proxy, pode-se criar o arquivo sem o parâmetro `PROXY_URL`
-  - Para a opção de métricas de blocos com túnel SSH (Lab/Prod), preencha também `SSH.LAB` e `SSH.PROD`
-  - O token do GitHub deve ter os seguintes escopos para acesso aos repositórios privados:
-    - **`repo`** (acesso completo a repositórios privados)
-    - **`read:project`** (leitura de projetos)
+Durante o `npm install`, o projeto tenta instalar automaticamente o pacote Python `ethereum-etl` via `postinstall`.
 
-```json
-{   
-    "GITHUB_RBB_TOKEN":"<github_api_token>",
-    "PROXY_URL": "http://host:port",
-    "ORG": "<organization_name>",
-  "PROJECT_NUMBER": <project_number>,
-  "SSH": {
-    "LAB": {
-      "REMOTE_HOST": "<lab_remote_ip_or_host>",
-      "REMOTE_PORT": "8545",
-      "SSH_HOST": "<lab_ssh_host>"
-    },
-    "PROD": {
-      "REMOTE_HOST": "<prod_remote_ip_or_host>",
-      "REMOTE_PORT": "8545",
-      "SSH_HOST": "<prod_ssh_host>"
-    }
-  }
-}
-```
+## Configuracao por Perfil
 
-**Como gerar o token do GitHub com os escopos corretos:**
+Campos comuns aos dois perfis:
 
-1. Acesse: https://github.com/settings/tokens
-2. Clique em "Generate new token" → "Generate new token (classic)"
-3. Dê um nome descritivo (ex: "RBB Indicadores")
-4. Selecione os escopos:
-   - ✅ **repo** (Full control of private repositories)
-   - ✅ **read:project** (Read project data)
-5. Clique em "Generate token"
-6. **Copie o token imediatamente** (ele só será exibido uma vez)
-7. Cole no arquivo `config.json` no campo `GITHUB_RBB_TOKEN`
+- `GITHUB_RBB_TOKEN`
+- `PROXY_URL` quando houver proxy
+
+Campos do perfil Evolucao:
+
+- `ORG`
+- `PROJECT_NUMBER`
+
+Campos do perfil Operacao:
+
+- `INDICADORES_BASE_DIR`
+- `SSH.LAB`
+- `SSH.PROD`
+
+O token do GitHub deve ter os seguintes escopos para acesso aos repositorios privados:
+
+- `repo`
+- `read:project`
 
 ## Ferramentas
 
-- [Blocks](Blocks/README.md) - Gera indicadores sobre a produção de blocos.
-- [Issues](Issues/README.md) - Coleta dados sobre o tratamento de incidentes.
-- [Projects](Projects/README.md) - Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
+- [Blocks/README.md](Blocks/README.md) - indicadores de producao de blocos.
+- [Issues/README.md](Issues/README.md) - acompanhamento de incidentes em producao.
+- [Projects/README.md](Projects/README.md) - acompanhamento das iniciativas do projeto.
 
-## Preparação do Ambiente
+## Instalacao
 
-Para instalar as dependências desse projeto basta utilizar o seguinte comando na pasta raiz:
-
-```javascript
+```bash
 npm install
 ```
 
-Durante o `npm install`, o projeto também tenta instalar automaticamente o pacote Python `ethereum-etl` via `postinstall`.
+## Execucao
 
-## Execução das Ferramentas
+Pontos de entrada disponiveis:
 
-Para facilitar a execução das ferramentas, você pode utilizar os scripts de menu interativo disponíveis:
+- `node run.js` - seletor de perfil
+- `node run-operacao.js` - menu do gestor de operacao
+- `node run-evolucao.js` - menu do gestor de evolucao
+- `npm run menu`
+- `npm run menu:operacao`
+- `npm run menu:evolucao`
 
-### Windows (Batch)
+## Perfil Operacao
 
-```bat
-run.bat
-```
+Use `node run-operacao.js` para acessar:
 
-### Multiplataforma (Node.js)
+1. Exportar Blocos (ethereum-etl)
+2. Metricas de Producao de Blocos
+3. Estatisticas do Tempo de Producao de Blocos
+4. Issues em Producao
+5. Gerar HTML Operacional
+6. Sair
 
-```bash
-node run.js
-```
+Observacoes:
 
-ou (se tiver permissões de execução no Linux/Mac):
+- As metricas de blocos e a exportacao usam tunel SSH.
+- O HTML operacional gera `result/Indicadores-operacao.html`.
+- O HTML operacional usa o historico em `INDICADORES_BASE_DIR` e inclui incidentes quando `result/Incidentes.csv` estiver disponivel.
 
-```bash
-./run.js
-```
+## Perfil Evolucao
 
-Ambos os scripts fornecem o mesmo menu interativo para escolher e executar as diferentes ferramentas disponíveis:
+Use `node run-evolucao.js` para acessar:
 
-1. Métricas de Produção de Blocos
-2. Estatísticas do Tempo de Produção de Blocos
-3. Acompanhamento das Iniciativas de Maturação do Piloto
-4. Issues em Produção
-5. Gerar HTML de Blocos
-6. Exportar Blocos (ethereum-etl)
-7. Sair
+1. Acompanhamento das Iniciativas de Maturacao do Piloto
+2. Gerar HTML de Evolucao
+3. Sair
 
-### Linux
+Observacoes:
 
-Para executar o script no Linux, utilize o seguinte comando na pasta raiz do projeto:
+- O perfil de evolucao nao requer configuracao de SSH.
+- O HTML de evolucao gera `result/Indicadores-evolucao.html`.
+- O HTML de evolucao usa um arquivo `Iniciativas_YYYY-MM.csv` da pasta `result`.
 
-```sh
-./run.sh
-```
+## Seletor de Perfil
 
-### Menu de Ferramentas
+`node run.js` abre um menu simples para encaminhar o usuario ao perfil correto sem misturar as opcoes.
 
-O menu interativo permite escolher entre as seguintes opções:
+## Valores Padrao
 
-1. **Métricas de Produção de Blocos**: Gera indicadores sobre a produção de blocos.
-   - **Túnel SSH Automático**: Esta opção automaticamente estabelece um túnel SSH para o nó da RBB antes de coletar métricas.
-   - Você pode escolher entre:
-     - **Lab** (definido no `config.json`)
-     - **Prod** (definido no `config.json`)
-     - **Customizado** (especificar manualmente IP, porta e host SSH)
-   - O túnel é automaticamente encerrado após a coleta de dados.
-   - Requer acesso SSH aos servidores da RBB.
+- Datas: primeiro e ultimo dia do mes anterior
+- Periodos mensais: mes anterior
+- Username SSH: usuario logado no sistema
+- Caminhos de arquivo: sugestoes baseadas na estrutura atual do projeto
 
-2. **Estatisticas do Tempo de Producao de Blocos**: Calcula estatísticas do tempo de produção dos blocos.
-3. **Acompanhamento das Iniciativas de Maturação do Piloto**: Gera indicadores sobre o andamento das atividades do projeto de Maturação do Piloto.
-4. **Issues em Produção**: Coleta dados sobre o tratamento de incidentes.
-5. **Gerar HTML de Blocos**: Gera o relatório HTML de indicadores na pasta `result`.
-6. **Exportar Blocos (ethereum-etl)**: Exporta dados de blocos para `result/blocos` usando `ethereumetl export_all`.
-  - Datas padrão: primeiro e último dia do mês anterior.
-  - Provider utilizado: `http://127.0.0.1:8545` (requer túnel SSH ativo).
-7. **Sair**: Encerra o script.
-
-**Siga as instruções no menu para fornecer os parâmetros necessários para cada ferramenta.**
-
-### Valores Padrão Inteligentes
-
-O script `run.js` oferece valores padrão inteligentes para facilitar a execução:
-
-- **Datas**: Para todas as ferramentas que solicitam datas, o padrão é o primeiro e último dia do mês anterior.
-- **Username SSH**: O padrão é o usuário logado no sistema (variável `%USERNAME%`).
-- **Caminhos de arquivo**: Valores padrão baseados na estrutura do projeto.
-
-Para aceitar um valor padrão, basta pressionar **ENTER** sem digitar nada.
+Para aceitar um valor padrao, basta pressionar ENTER sem digitar nada.

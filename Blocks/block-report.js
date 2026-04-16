@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const RESULT_DIR = path.resolve(__dirname, '..', 'result');
-const OUTPUT_PATH = path.join(RESULT_DIR, 'Indicadores.html');
+const DEFAULT_OUTPUT_PATH = path.join(RESULT_DIR, 'Indicadores-operacao.html');
 
 const ORG_ORDER = [
     { key: 'BNDES', label: 'BNDES' },
@@ -406,7 +406,7 @@ function buildHtml({ rows, initiatives, incidents }) {
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<title>Indicadores</title>
+<title>Indicadores Operacionais</title>
 <style>
     body {
         font-family: "Segoe UI", Arial, sans-serif;
@@ -533,8 +533,8 @@ ${incidentsSection}
 }
 
 function main() {
-    if (process.argv.length !== 4 && process.argv.length !== 5 && process.argv.length !== 6) {
-        throw new Error('Uso: node Blocks/block-report.js <mes-inicial/MM/AAAA> <mes-final/MM/AAAA> [arquivo_iniciativas] [arquivo_incidentes]');
+    if (process.argv.length < 4 || process.argv.length > 7) {
+        throw new Error('Uso: node Blocks/block-report.js <mes-inicial/MM/AAAA> <mes-final/MM/AAAA> [arquivo_iniciativas|arquivo_incidentes|arquivo_saida_html ...]');
     }
 
     const startPeriod = parsePeriod(process.argv[2]);
@@ -616,23 +616,31 @@ function main() {
     }
 
     let initiativesData = null;
-    const initiativesPath = process.argv[4];
-    if (initiativesPath) {
-        if (!fs.existsSync(initiativesPath)) {
-            throw new Error(`Arquivo de iniciativas nao encontrado: ${initiativesPath}`);
-        }
-        initiativesData = parseInitiativesCsv(initiativesPath, startPeriod, endPeriod);
-    }
-
     let incidentsData = null;
-    const incidentsPath = process.argv[5];
-    if (incidentsPath) {
-        if (!fs.existsSync(incidentsPath)) {
-            throw new Error(`Arquivo de incidentes nao encontrado: ${incidentsPath}`);
+    let outputPath = DEFAULT_OUTPUT_PATH;
+    const extraArgs = process.argv.slice(4);
+
+    for (const extraArg of extraArgs) {
+        const normalized = path.basename(extraArg).toLowerCase();
+        if (normalized.endsWith('.html')) {
+            outputPath = extraArg;
+            continue;
         }
-        const items = parseIncidentsCsv(incidentsPath);
-        const monthLabel = `${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][endPeriod.month - 1]}/${String(endPeriod.year).slice(-2)}`;
-        incidentsData = { monthLabel, items };
+
+        if (!fs.existsSync(extraArg)) {
+            throw new Error(`Arquivo nao encontrado: ${extraArg}`);
+        }
+
+        if (normalized.startsWith('iniciativas_') && normalized.endsWith('.csv')) {
+            initiativesData = parseInitiativesCsv(extraArg, startPeriod, endPeriod);
+            continue;
+        }
+
+        if (normalized === 'incidentes.csv') {
+            const items = parseIncidentsCsv(extraArg);
+            const monthLabel = `${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][endPeriod.month - 1]}/${String(endPeriod.year).slice(-2)}`;
+            incidentsData = { monthLabel, items };
+        }
     }
 
     const html = buildHtml({ rows, initiatives: initiativesData, incidents: incidentsData });
@@ -641,8 +649,8 @@ function main() {
         fs.mkdirSync(RESULT_DIR, { recursive: true });
     }
 
-    fs.writeFileSync(OUTPUT_PATH, html, 'utf8');
-    console.log(`HTML gerado com sucesso em: ${OUTPUT_PATH}`);
+    fs.writeFileSync(outputPath, html, 'utf8');
+    console.log(`HTML gerado com sucesso em: ${outputPath}`);
 }
 
 try {

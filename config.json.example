@@ -1,8 +1,20 @@
 {
+  "_COMMON": [
+    "Campos usados por run-operacao.js e run-evolucao.js"
+  ],
   "GITHUB_RBB_TOKEN": "<github_api_token>",
   "PROXY_URL": "http://host:port",
+  "_EVOLUCAO": [
+    "Campos usados apenas por run-evolucao.js e pela coleta de iniciativas"
+  ],
   "ORG": "<organization_name>",
   "PROJECT_NUMBER": 1,
+  "_OPERACAO": [
+    "Campos usados apenas por run-operacao.js",
+    "INDICADORES_BASE_DIR e usado para gerar o HTML operacional a partir do historico consolidado",
+    "SSH.LAB e SSH.PROD sao usados para tunel SSH nas metricas e exportacao de blocos"
+  ],
+  "INDICADORES_BASE_DIR": "<network_folder_with_monthly_indicators>",
   "SSH": {
     "LAB": {
       "REMOTE_HOST": "<lab_remote_ip_or_host>",
