@@ -90,8 +90,8 @@ Use `node run-operacao.js` para acessar:
 Observacoes:
 
 - O dump local e as metricas de blocos usam tunel SSH com ambiente Lab ou Prd configurado no `config.json`.
-- O dump local mensal e salvo em `result/dump/lab/AAAA-MM` ou `result/dump/prd/AAAA-MM`.
-- A publicacao para rede procura os dumps locais do mes informado, percorre as subpastas do `ethereum-etl`, copia os arquivos encontrados para a raiz de `DUMP_RBB_LAB_BASE_DIR/AAAA-MM` e `DUMP_RBB_PRD_BASE_DIR/AAAA-MM` e renomeia os arquivos para o padrao `tipoAAAA-MM.csv`.
+- O dump local mensal e salvo em `result/dump/lab/AAAA-MM/blocksAAAA-MM.csv` ou `result/dump/prd/AAAA-MM/blocksAAAA-MM.csv`.
+- A publicacao para rede procura os dumps locais do mes informado, copia para a raiz de `DUMP_RBB_LAB_BASE_DIR/AAAA-MM` e `DUMP_RBB_PRD_BASE_DIR/AAAA-MM` apenas os arquivos efetivamente presentes e renomeia arquivos legados para o padrao `tipoAAAA-MM.csv`.
 - O HTML operacional gera `result/Indicadores-operacao.html`.
 - O HTML operacional usa o historico em `INDICADORES_BASE_DIR` e inclui incidentes quando `result/Incidentes.csv` estiver disponivel.
 - Se `result/Incidentes.csv` nao existir, o HTML e gerado sem a secao de incidentes e o aviso aparece no terminal.

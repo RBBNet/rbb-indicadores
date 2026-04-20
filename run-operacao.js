@@ -247,8 +247,27 @@ function copyFile(source, destination) {
 }
 
 function ensureDir(dirPath) {
-    if (!fs.existsSync(dirPath)) {
+    try {
         fs.mkdirSync(dirPath, { recursive: true });
+    } catch (error) {
+        if (error.code !== 'EEXIST') {
+            throw error;
+        }
+    }
+}
+
+function ensureNetworkTargetDir(baseDir, targetDir) {
+    if (!fs.existsSync(baseDir)) {
+        throw new Error(`Pasta base de destino nao encontrada ou inacessivel: ${baseDir}`);
+    }
+
+    try {
+        fs.mkdirSync(targetDir, { recursive: true });
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            throw new Error(`Nao foi possivel criar a pasta de destino ${targetDir}. Verifique se a pasta base existe e se voce tem permissao de escrita em ${baseDir}.`);
+        }
+        throw error;
     }
 }
 
@@ -385,19 +404,28 @@ function copyDir(source, destination) {
 
 function collectLeafFiles(dirPath) {
     const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const directFiles = entries
+        .filter(entry => entry.isFile())
+        .map(entry => path.join(dirPath, entry.name));
     const childDirectories = entries.filter(entry => entry.isDirectory());
 
     if (childDirectories.length === 0) {
-        return entries
-            .filter(entry => entry.isFile())
-            .map(entry => path.join(dirPath, entry.name));
+        return directFiles;
     }
 
-    return childDirectories.flatMap(entry => collectLeafFiles(path.join(dirPath, entry.name)));
+    return [
+        ...directFiles,
+        ...childDirectories.flatMap(entry => collectLeafFiles(path.join(dirPath, entry.name)))
+    ];
 }
 
 function buildPublishedDumpFileName(sourceFilePath, folderName) {
     const parsedPath = path.parse(sourceFilePath);
+
+    if (parsedPath.name.endsWith(folderName)) {
+        return parsedPath.base;
+    }
+
     const monthlyDumpMatch = /^(?<prefix>.+?)_\d+_\d+$/.exec(parsedPath.name);
 
     if (monthlyDumpMatch?.groups?.prefix) {
@@ -666,17 +694,18 @@ function getMenuHelpText(option) {
             '- A consulta aos blocos e feita no node blockchain acessado via tunel SSH local em http://127.0.0.1:8545.',
             '',
             'Saidas geradas:',
-            '- Diretorio result\\dump\\prd\\AAAA-MM ou result\\dump\\lab\\AAAA-MM com subpastas e arquivos exportados pelo ethereum-etl, como blocks, transactions, logs, receipts, token_transfers, tokens e contracts.',
+            '- Diretorio result\\dump\\prd\\AAAA-MM ou result\\dump\\lab\\AAAA-MM contendo o arquivo blocksAAAA-MM.csv exportado pelo ethereum-etl.',
             '- O intervalo de blocos calculado e exibido na tela antes da exportacao.'
         ],
         '2': [
             'Opcao 2 - Publica dump RBB para pasta da rede',
             '',
             'Objetivo:',
-            'Copia para a rede os dumps locais de Lab e Prd que existirem para o mes selecionado, achatando a estrutura de subpastas do ethereum-etl.',
+            'Copia para a rede os dumps locais de Lab e Prd que existirem para o mes selecionado, tolerando dumps parciais e compatibilizando formatos novo e legado.',
             '',
             'Entradas solicitadas:',
             '- Mes de referencia no formato MM/AAAA.',
+            '- Confirmacao antes de iniciar a copia para a rede.',
             '',
             'Valores default:',
             '- Mes de referencia: mes anterior ao atual.',
@@ -685,11 +714,12 @@ function getMenuHelpText(option) {
             '- O sistema procura localmente por result\\dump\\prd\\AAAA-MM e result\\dump\\lab\\AAAA-MM.',
             '- Os destinos de rede sao lidos de config.json nas chaves DUMP_RBB_PRD_BASE_DIR e DUMP_RBB_LAB_BASE_DIR.',
             '- Se a pasta de destino do mes nao existir na rede, ela sera criada antes da copia.',
+            '- O sistema copia apenas os arquivos efetivamente presentes no dump local, sem assumir o conjunto completo do ethereum-etl.',
             '',
             'Saidas geradas:',
             '- Copia do dump de Prd para DUMP_RBB_PRD_BASE_DIR\\AAAA-MM, se existir localmente, com os arquivos levados para a raiz da pasta de destino.',
             '- Copia do dump de Lab para DUMP_RBB_LAB_BASE_DIR\\AAAA-MM, se existir localmente, com os arquivos levados para a raiz da pasta de destino.',
-            '- Os nomes sao convertidos de algo como blocks_17595958_18236659.csv para blocksAAAA-MM.csv.',
+            '- Os nomes sao convertidos de algo como blocks_17595958_18236659.csv para blocksAAAA-MM.csv; se o arquivo ja estiver no padrao mensal, ele e preservado.',
             '- Avisos no terminal indicando se foi copiado lab, prd, ambos ou nenhum.'
         ],
         '3': [
@@ -1050,6 +1080,7 @@ async function dumpRbbToLocalFolder() {
     const username = await questionWithDefault('Usuario SSH', defaultUsername);
     const providerUri = 'http://127.0.0.1:8545';
     const outputDir = path.join(__dirname, 'result', 'dump', environment.envSlug, monthRange.folderName);
+    const outputPath = path.join(outputDir, `blocks${monthRange.folderName}.csv`);
     const totalStages = 4;
 
     try {
@@ -1084,19 +1115,18 @@ async function dumpRbbToLocalFolder() {
         console.log(`Mes de referencia: ${monthRange.folderName}`);
         console.log(`Bloco inicial: ${startBlock}`);
         console.log(`Bloco final: ${endBlock}`);
-        console.log(`Diretorio de saida: ${outputDir}\n`);
+        console.log(`Arquivo de saida: ${outputPath}\n`);
 
         logStage(3, totalStages, 'Exportando dump com ethereum-etl');
         resetDir(outputDir);
         console.log('Iniciando exportacao com ethereum-etl. Isso pode levar varios minutos.');
 
         await runCommand('ethereumetl', [
-            'export_all',
-            '--start', String(startBlock),
-            '--end', String(endBlock),
-            '--partition-batch-size', '6000000',
+            'export_blocks_and_transactions',
+            '--start-block', String(startBlock),
+            '--end-block', String(endBlock),
             '--provider-uri', providerUri,
-            '--output-dir', outputDir
+            '--blocks-output', outputPath
         ], {
             progressLabel: 'Exportacao de blocos em andamento',
             progressIntervalMs: 20000
@@ -1104,7 +1134,7 @@ async function dumpRbbToLocalFolder() {
 
         logStage(4, totalStages, 'Finalizando dump local');
         console.log('\nDump concluido com sucesso!');
-        console.log(`Arquivos salvos em: ${outputDir}`);
+        console.log(`Arquivo salvo em: ${outputPath}`);
     } catch (error) {
         console.log(`\nERRO: ${error.message}`);
         console.log('Verifique suas credenciais SSH, conectividade e se o pacote ethereum-etl esta instalado.');
@@ -1156,6 +1186,13 @@ async function publishRbbDumpToNetworkFolder() {
 
     console.log(`Dumps locais encontrados para copia: ${availablePlans.map(item => item.label).join(' e ')}.`);
 
+    const confirmation = await questionWithDefault('Confirmar copia para a rede? (s/n)', 'n');
+    if (confirmation.trim().toLowerCase() !== 's') {
+        console.log('Copia cancelada pelo usuario.');
+        await pause();
+        return;
+    }
+
     for (const plan of availablePlans) {
         if (!plan.targetBaseDir) {
             console.log(`ERRO: Configure ${plan.envName === 'PROD' ? 'DUMP_RBB_PRD_BASE_DIR' : 'DUMP_RBB_LAB_BASE_DIR'} no config.json.`);
@@ -1167,8 +1204,7 @@ async function publishRbbDumpToNetworkFolder() {
     try {
         for (const plan of availablePlans) {
             const targetDir = path.join(plan.targetBaseDir, folderName);
-            ensureDir(plan.targetBaseDir);
-            ensureDir(targetDir);
+            ensureNetworkTargetDir(plan.targetBaseDir, targetDir);
             console.log(`\nCopiando dump ${plan.label}...`);
             console.log(`Origem: ${plan.sourceDir}`);
             console.log(`Destino: ${targetDir}`);
