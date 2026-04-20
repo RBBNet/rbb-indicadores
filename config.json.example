@@ -12,9 +12,12 @@
   "_OPERACAO": [
     "Campos usados apenas por run-operacao.js",
     "INDICADORES_BASE_DIR e usado para gerar o HTML operacional a partir do historico consolidado",
+    "DUMP_RBB_PRD_BASE_DIR e DUMP_RBB_LAB_BASE_DIR sao usados para publicar os dumps mensais na rede",
     "SSH.LAB e SSH.PROD sao usados para tunel SSH nas metricas e exportacao de blocos"
   ],
   "INDICADORES_BASE_DIR": "<network_folder_with_monthly_indicators>",
+  "DUMP_RBB_PRD_BASE_DIR": "<network_folder_with_monthly_prd_dump>",
+  "DUMP_RBB_LAB_BASE_DIR": "<network_folder_with_monthly_lab_dump>",
   "SSH": {
     "LAB": {
       "REMOTE_HOST": "<lab_remote_ip_or_host>",

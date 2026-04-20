@@ -269,6 +269,30 @@ function getDefaultMonthPeriod() {
     return `${String(lastMonth.getMonth() + 1).padStart(2, '0')}/${lastMonth.getFullYear()}`;
 }
 
+function parseMonthPeriod(period) {
+    const match = /^(0[1-9]|1[0-2])\/(20\d{2})$/.exec(String(period).trim());
+    if (!match) {
+        throw new Error(`Periodo invalido: ${period}. Use MM/AAAA.`);
+    }
+
+    return {
+        month: parseInt(match[1], 10),
+        year: parseInt(match[2], 10)
+    };
+}
+
+function getMonthDateRange(periodString) {
+    const { month, year } = parseMonthPeriod(periodString);
+    const startDate = new Date(Date.UTC(year, month - 1, 1, 3, 0, 0, 0));
+    const endDate = new Date(Date.UTC(year, month, 1, 3, 0, 0, 0) - 1000);
+
+    return {
+        startDate,
+        endDate,
+        folderName: `${year}-${String(month).padStart(2, '0')}`
+    };
+}
+
 function getDefaultSemesterPeriodRange() {
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -308,6 +332,105 @@ function getSshEnvironmentConfig(envName) {
         remotePort: String(envConfig.REMOTE_PORT || '8545'),
         sshHost: envConfig.SSH_HOST
     };
+}
+
+function getDumpNetworkBaseDir(envName) {
+    if (envName === 'PROD') {
+        return config.DUMP_RBB_PRD_BASE_DIR;
+    }
+    if (envName === 'LAB') {
+        return config.DUMP_RBB_LAB_BASE_DIR;
+    }
+    return null;
+}
+
+async function selectOperationalEnvironment() {
+    console.log('\n--- Ambiente RBB ---');
+    console.log('1. Lab');
+    console.log('2. Prd');
+
+    const envChoice = await question('Escolha o ambiente (1-2): ');
+    const normalizedChoice = envChoice.trim();
+    const envName = normalizedChoice === '2' ? 'PROD' : 'LAB';
+    const envLabel = envName === 'PROD' ? 'Prd' : 'Lab';
+    const envSlug = envName === 'PROD' ? 'prd' : 'lab';
+    const sshEnvConfig = getSshEnvironmentConfig(envName);
+
+    if (!sshEnvConfig?.remoteHost || !sshEnvConfig?.sshHost) {
+        throw new Error(`Configure SSH.${envName}.REMOTE_HOST e SSH.${envName}.SSH_HOST no config.json.`);
+    }
+
+    if (normalizedChoice !== '1' && normalizedChoice !== '2') {
+        console.log(`Opcao invalida. Usando ${envLabel}.`);
+    }
+
+    return {
+        envName,
+        envLabel,
+        envSlug,
+        ...sshEnvConfig
+    };
+}
+
+function resetDir(dirPath) {
+    fs.rmSync(dirPath, { recursive: true, force: true });
+    fs.mkdirSync(dirPath, { recursive: true });
+}
+
+function copyDir(source, destination) {
+    ensureDir(path.dirname(destination));
+    fs.rmSync(destination, { recursive: true, force: true });
+    fs.cpSync(source, destination, { recursive: true, force: true });
+}
+
+function collectLeafFiles(dirPath) {
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    const childDirectories = entries.filter(entry => entry.isDirectory());
+
+    if (childDirectories.length === 0) {
+        return entries
+            .filter(entry => entry.isFile())
+            .map(entry => path.join(dirPath, entry.name));
+    }
+
+    return childDirectories.flatMap(entry => collectLeafFiles(path.join(dirPath, entry.name)));
+}
+
+function buildPublishedDumpFileName(sourceFilePath, folderName) {
+    const parsedPath = path.parse(sourceFilePath);
+    const monthlyDumpMatch = /^(?<prefix>.+?)_\d+_\d+$/.exec(parsedPath.name);
+
+    if (monthlyDumpMatch?.groups?.prefix) {
+        return `${monthlyDumpMatch.groups.prefix}${folderName}${parsedPath.ext}`;
+    }
+
+    return `${parsedPath.name}${folderName}${parsedPath.ext}`;
+}
+
+function publishFlattenedDump(sourceDir, targetDir, folderName) {
+    const sourceFiles = collectLeafFiles(sourceDir);
+
+    if (sourceFiles.length === 0) {
+        throw new Error(`Nenhum arquivo encontrado em ${sourceDir} para publicar.`);
+    }
+
+    ensureDir(targetDir);
+    resetDir(targetDir);
+    const writtenTargets = new Set();
+
+    for (const sourceFile of sourceFiles) {
+        const targetFileName = buildPublishedDumpFileName(sourceFile, folderName);
+        const targetFilePath = path.join(targetDir, targetFileName);
+
+        if (writtenTargets.has(targetFilePath)) {
+            throw new Error(`Conflito ao publicar dump: mais de um arquivo geraria ${targetFileName}.`);
+        }
+
+        fs.copyFileSync(sourceFile, targetFilePath);
+        writtenTargets.add(targetFilePath);
+    }
+
+    return sourceFiles.length;
 }
 
 function downloadFile(url, dest) {
@@ -523,33 +646,54 @@ async function selectIncidentsFile(resultDir) {
 function getMenuHelpText(option) {
     const details = {
         '1': [
-            'Opcao 1 - Exportar Blocos (ethereum-etl)',
+            'Opcao 1 - Dump RBB (ethereum-etl) para pasta local',
             '',
             'Objetivo:',
-            'Exporta dados brutos da blockchain para a pasta result\\blocos usando o ethereum-etl.',
+            'Exporta o dump bruto da blockchain para a pasta local mensal do ambiente selecionado.',
             '',
             'Entradas solicitadas:',
-            '- Data inicial no formato DD/MM/AAAA.',
-            '- Data final no formato DD/MM/AAAA.',
-            '- Ambiente do tunel SSH: Lab, Prod ou Customizado.',
+            '- Mes de referencia no formato MM/AAAA.',
+            '- Ambiente: Lab ou Prd.',
             '- Usuario SSH.',
             '',
             'Valores default:',
-            '- Data inicial: primeiro dia do mes anterior.',
-            '- Data final: ultimo dia do mes anterior.',
-            '- Porta remota do ambiente customizado: 8545.',
+            '- Mes de referencia: mes anterior ao atual.',
             '- Usuario SSH: valor de USERNAME ou USER do sistema.',
             '',
             'Origem dos dados de entrada:',
-            '- Os hosts Lab e Prod vem de config.json, no objeto SSH.',
+            '- Os endpoints de Lab e Prd vem de config.json, no objeto SSH.',
+            '- O sistema deriva internamente o primeiro e o ultimo dia do mes informado e traduz essas datas para blocos no ambiente escolhido.',
             '- A consulta aos blocos e feita no node blockchain acessado via tunel SSH local em http://127.0.0.1:8545.',
             '',
             'Saidas geradas:',
-            '- Diretorio result\\blocos com subpastas e arquivos exportados pelo ethereum-etl, como blocks, transactions, logs, receipts, token_transfers, tokens e contracts.',
+            '- Diretorio result\\dump\\prd\\AAAA-MM ou result\\dump\\lab\\AAAA-MM com subpastas e arquivos exportados pelo ethereum-etl, como blocks, transactions, logs, receipts, token_transfers, tokens e contracts.',
             '- O intervalo de blocos calculado e exibido na tela antes da exportacao.'
         ],
         '2': [
-            'Opcao 2 - Metricas de Producao de Blocos',
+            'Opcao 2 - Publica dump RBB para pasta da rede',
+            '',
+            'Objetivo:',
+            'Copia para a rede os dumps locais de Lab e Prd que existirem para o mes selecionado, achatando a estrutura de subpastas do ethereum-etl.',
+            '',
+            'Entradas solicitadas:',
+            '- Mes de referencia no formato MM/AAAA.',
+            '',
+            'Valores default:',
+            '- Mes de referencia: mes anterior ao atual.',
+            '',
+            'Origem dos dados de entrada:',
+            '- O sistema procura localmente por result\\dump\\prd\\AAAA-MM e result\\dump\\lab\\AAAA-MM.',
+            '- Os destinos de rede sao lidos de config.json nas chaves DUMP_RBB_PRD_BASE_DIR e DUMP_RBB_LAB_BASE_DIR.',
+            '- Se a pasta de destino do mes nao existir na rede, ela sera criada antes da copia.',
+            '',
+            'Saidas geradas:',
+            '- Copia do dump de Prd para DUMP_RBB_PRD_BASE_DIR\\AAAA-MM, se existir localmente, com os arquivos levados para a raiz da pasta de destino.',
+            '- Copia do dump de Lab para DUMP_RBB_LAB_BASE_DIR\\AAAA-MM, se existir localmente, com os arquivos levados para a raiz da pasta de destino.',
+            '- Os nomes sao convertidos de algo como blocks_17595958_18236659.csv para blocksAAAA-MM.csv.',
+            '- Avisos no terminal indicando se foi copiado lab, prd, ambos ou nenhum.'
+        ],
+        '3': [
+            'Opcao 3 - Metricas de Producao de Blocos',
             '',
             'Objetivo:',
             'Calcula metricas operacionais de producao de blocos a partir de um provider acessado por tunel SSH.',
@@ -557,17 +701,16 @@ function getMenuHelpText(option) {
             'Entradas solicitadas:',
             '- Data inicial no formato DD/MM/AAAA.',
             '- Data final no formato DD/MM/AAAA.',
-            '- Ambiente do tunel SSH: Lab, Prod ou Customizado.',
+            '- Ambiente: Lab ou Prd.',
             '- Usuario SSH.',
             '',
             'Valores default:',
             '- Data inicial: primeiro dia do mes anterior.',
             '- Data final: ultimo dia do mes anterior.',
-            '- Porta remota do ambiente customizado: 8545.',
             '- Usuario SSH: valor de USERNAME ou USER do sistema.',
             '',
             'Origem dos dados de entrada:',
-            '- Configuracoes Lab e Prod sao lidas de config.json, no objeto SSH.',
+            '- Configuracoes Lab e Prd sao lidas de config.json, no objeto SSH.',
             '- O provider usado pelo processamento e http://localhost:8545, exposto pelo tunel SSH.',
             '- Os arquivos nodes_lab.json e nodes_piloto.json sao baixados do repositorio GitHub RBBNet/participantes para a pasta result, caso nao existam localmente ou o usuario escolha sobrescrever.',
             '',
@@ -575,8 +718,8 @@ function getMenuHelpText(option) {
             '- Arquivos CSV de metricas gravados na pasta result pelo script Blocks\\block-metrics.js.',
             '- Logs do processamento exibidos no terminal durante a execucao.'
         ],
-        '3': [
-            'Opcao 3 - Estatisticas do Tempo de Producao de Blocos',
+        '4': [
+            'Opcao 4 - Estatisticas do Tempo de Producao de Blocos',
             '',
             'Objetivo:',
             'Processa um CSV mensal de blocos e gera estatisticas textuais de tempo de producao.',
@@ -599,8 +742,8 @@ function getMenuHelpText(option) {
             '- Arquivo temporario local em Blocks\\blocksAAAA-MM.csv.',
             '- Arquivo result\\Blocos-estat.txt com as estatisticas geradas por Blocks\\block-analytics.js.'
         ],
-        '4': [
-            'Opcao 4 - Issues em Producao',
+        '5': [
+            'Opcao 5 - Issues em Producao',
             '',
             'Objetivo:',
             'Executa a coleta e consolidacao de issues de producao para o periodo informado.',
@@ -621,8 +764,8 @@ function getMenuHelpText(option) {
             '- Arquivos de saida produzidos por Issues\\issue-metrics.js, tipicamente na pasta result.',
             '- Logs do processamento mostrados no terminal.'
         ],
-        '5': [
-            'Opcao 5 - Gerar HTML Operacional',
+        '6': [
+            'Opcao 6 - Gerar HTML Operacional',
             '',
             'Objetivo:',
             'Gera um HTML consolidado com indicadores operacionais para todos os meses do intervalo informado.',
@@ -645,14 +788,14 @@ function getMenuHelpText(option) {
             'Saidas geradas:',
             '- Arquivo result\\Indicadores-operacao.html gerado por Blocks\\block-report.js.'
         ],
-        '6': [
-            'Opcao 6 - Help',
+        '7': [
+            'Opcao 7 - Help',
             '',
             'Objetivo:',
             'Permite escolher uma opcao do menu e ver a descricao detalhada de funcionamento, entradas, defaults e saidas.'
         ],
-        '7': [
-            'Opcao 7 - Sair',
+        '8': [
+            'Opcao 8 - Sair',
             '',
             'Objetivo:',
             'Fecha o menu operacional, encerra a interface readline e finaliza o processo.'
@@ -665,15 +808,16 @@ function getMenuHelpText(option) {
 async function showHelpMenu() {
     console.log('\n--- Help do Menu Operacional ---\n');
     console.log('Escolha a opcao que deseja detalhar:');
-    console.log('1. Exportar Blocos (ethereum-etl)');
-    console.log('2. Metricas de Producao de Blocos');
-    console.log('3. Estatisticas do Tempo de Producao de Blocos');
-    console.log('4. Issues em Producao');
-    console.log('5. Gerar HTML Operacional');
-    console.log('6. Help');
-    console.log('7. Sair');
+    console.log('1. Dump RBB (ethereum-etl) para pasta local');
+    console.log('2. Publica dump RBB para pasta da rede');
+    console.log('3. Metricas de Producao de Blocos');
+    console.log('4. Estatisticas do Tempo de Producao de Blocos');
+    console.log('5. Issues em Producao');
+    console.log('6. Gerar HTML Operacional');
+    console.log('7. Help');
+    console.log('8. Sair');
 
-    const option = await question('Qual opcao deseja detalhar (1-7)? ');
+    const option = await question('Qual opcao deseja detalhar (1-8)? ');
     const helpText = getMenuHelpText(option.trim());
 
     if (!helpText) {
@@ -691,38 +835,42 @@ async function showMenu() {
     console.log('==========================================');
     console.log('      Menu RBB - Perfil Operacao');
     console.log('==========================================');
-    console.log('1. Exportar Blocos (ethereum-etl)');
-    console.log('2. Metricas de Producao de Blocos');
-    console.log('3. Estatisticas do Tempo de Producao de Blocos');
-    console.log('4. Issues em Producao');
-    console.log('5. Gerar HTML Operacional');
-    console.log('6. Help');
-    console.log('7. Sair');
+    console.log('1. Dump RBB (ethereum-etl) para pasta local');
+    console.log('2. Publica dump RBB para pasta da rede');
+    console.log('3. Metricas de Producao de Blocos');
+    console.log('4. Estatisticas do Tempo de Producao de Blocos');
+    console.log('5. Issues em Producao');
+    console.log('6. Gerar HTML Operacional');
+    console.log('7. Help');
+    console.log('8. Sair');
     console.log('==========================================');
 
-    const choice = await question('Escolha uma opcao (1-7): ');
+    const choice = await question('Escolha uma opcao (1-8): ');
 
     try {
         switch (choice.trim()) {
             case '1':
-                await exportBlocksWithEthereumEtl();
+                await dumpRbbToLocalFolder();
                 break;
             case '2':
-                await blockMetrics();
+                await publishRbbDumpToNetworkFolder();
                 break;
             case '3':
-                await blockAnalytics();
+                await blockMetrics();
                 break;
             case '4':
-                await issueMetrics();
+                await blockAnalytics();
                 break;
             case '5':
-                await operationalHtmlReport();
+                await issueMetrics();
                 break;
             case '6':
-                await showHelpMenu();
+                await operationalHtmlReport();
                 break;
             case '7':
+                await showHelpMenu();
+                break;
+            case '8':
                 console.log('Saindo...');
                 rl.close();
                 process.exit(0);
@@ -746,65 +894,20 @@ async function blockMetrics() {
     const startDate = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaults.startDate);
     const endDate = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaults.endDate);
 
-    console.log('\n--- Configuracao do Tunel SSH ---');
-    console.log('1. Lab (configurado em config.json)');
-    console.log('2. Prod (configurado em config.json)');
-    console.log('3. Customizado');
-
-    const tunnelChoice = await question('Escolha o ambiente (1-3): ');
-    let remoteHost;
-    let remotePort;
-    let sshHost;
-
-    switch (tunnelChoice.trim()) {
-        case '1': {
-            const labConfig = getSshEnvironmentConfig('LAB');
-            if (!labConfig?.remoteHost || !labConfig?.sshHost) {
-                console.log('ERRO: Configure SSH.LAB.REMOTE_HOST e SSH.LAB.SSH_HOST no config.json.');
-                await pause();
-                return;
-            }
-            remoteHost = labConfig.remoteHost;
-            remotePort = labConfig.remotePort;
-            sshHost = labConfig.sshHost;
-            break;
-        }
-        case '2': {
-            const prodConfig = getSshEnvironmentConfig('PROD');
-            if (!prodConfig?.remoteHost || !prodConfig?.sshHost) {
-                console.log('ERRO: Configure SSH.PROD.REMOTE_HOST e SSH.PROD.SSH_HOST no config.json.');
-                await pause();
-                return;
-            }
-            remoteHost = prodConfig.remoteHost;
-            remotePort = prodConfig.remotePort;
-            sshHost = prodConfig.sshHost;
-            break;
-        }
-        case '3':
-            remoteHost = await question('Digite o IP remoto: ');
-            remotePort = await questionWithDefault('Digite a porta remota', '8545');
-            sshHost = await question('Digite o host SSH: ');
-            break;
-        default: {
-            const defaultLabConfig = getSshEnvironmentConfig('LAB');
-            if (!defaultLabConfig?.remoteHost || !defaultLabConfig?.sshHost) {
-                console.log('Opcao invalida e SSH.LAB nao configurado no config.json.');
-                await pause();
-                return;
-            }
-            console.log('Opcao invalida. Usando Lab configurado no config.json.');
-            remoteHost = defaultLabConfig.remoteHost;
-            remotePort = defaultLabConfig.remotePort;
-            sshHost = defaultLabConfig.sshHost;
-        }
+    let environment;
+    try {
+        environment = await selectOperationalEnvironment();
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
     }
 
     const defaultUsername = process.env.USERNAME || process.env.USER || '';
     const username = await questionWithDefault('Usuario SSH', defaultUsername);
 
     try {
-        await createSSHTunnel(remoteHost, remotePort, username, sshHost);
+        await createSSHTunnel(environment.remoteHost, environment.remotePort, username, environment.sshHost);
         console.log('Aguardando estabilizacao do tunel...');
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -919,113 +1022,39 @@ async function operationalHtmlReport() {
     await pause();
 }
 
-async function issueMetrics() {
-    console.log('\n--- Issues em Producao ---\n');
+async function dumpRbbToLocalFolder() {
+    console.log('\n--- Dump RBB (ethereum-etl) para pasta local ---\n');
 
-    const defaults = getDefaultMonthDateRange();
-    const startDate = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaults.startDate);
-    const endDate = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaults.endDate);
+    const defaultPeriod = getDefaultMonthPeriod();
+    const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
 
-    rl.close();
-
+    let monthRange;
     try {
-        await runNode(path.join(__dirname, 'Issues', 'issue-metrics.js'), [startDate, endDate]);
-    } finally {
-        rl = createReadlineInterface();
-    }
-
-    await pause();
-}
-
-async function exportBlocksWithEthereumEtl() {
-    console.log('\n--- Exportacao de Blocos (ethereum-etl) ---\n');
-
-    const defaults = getDefaultMonthDateRange();
-    const startDateInput = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaults.startDate);
-    const endDateInput = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaults.endDate);
-
-    let startDate;
-    let endDate;
-    try {
-        startDate = parseDateToUTC3(startDateInput);
-        endDate = parseDateToUTC3(endDateInput);
+        monthRange = getMonthDateRange(referencePeriod);
     } catch (error) {
         console.log(`ERRO: ${error.message}`);
         await pause();
         return;
     }
 
-    if (endDate < startDate) {
-        console.log('ERRO: A data final deve ser maior ou igual a data inicial.');
+    let environment;
+    try {
+        environment = await selectOperationalEnvironment();
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
         await pause();
         return;
-    }
-
-    console.log('\n--- Configuracao do Tunel SSH ---');
-    console.log('1. Lab (configurado em config.json)');
-    console.log('2. Prod (configurado em config.json)');
-    console.log('3. Customizado');
-
-    const tunnelChoice = await question('Escolha o ambiente (1-3): ');
-    let remoteHost;
-    let remotePort;
-    let sshHost;
-
-    switch (tunnelChoice.trim()) {
-        case '1': {
-            const labConfig = getSshEnvironmentConfig('LAB');
-            if (!labConfig?.remoteHost || !labConfig?.sshHost) {
-                console.log('ERRO: Configure SSH.LAB.REMOTE_HOST e SSH.LAB.SSH_HOST no config.json.');
-                await pause();
-                return;
-            }
-            remoteHost = labConfig.remoteHost;
-            remotePort = labConfig.remotePort;
-            sshHost = labConfig.sshHost;
-            break;
-        }
-        case '2': {
-            const prodConfig = getSshEnvironmentConfig('PROD');
-            if (!prodConfig?.remoteHost || !prodConfig?.sshHost) {
-                console.log('ERRO: Configure SSH.PROD.REMOTE_HOST e SSH.PROD.SSH_HOST no config.json.');
-                await pause();
-                return;
-            }
-            remoteHost = prodConfig.remoteHost;
-            remotePort = prodConfig.remotePort;
-            sshHost = prodConfig.sshHost;
-            break;
-        }
-        case '3':
-            remoteHost = await question('Digite o IP remoto: ');
-            remotePort = await questionWithDefault('Digite a porta remota', '8545');
-            sshHost = await question('Digite o host SSH: ');
-            break;
-        default: {
-            const defaultLabConfig = getSshEnvironmentConfig('LAB');
-            if (!defaultLabConfig?.remoteHost || !defaultLabConfig?.sshHost) {
-                console.log('Opcao invalida e SSH.LAB nao configurado no config.json.');
-                await pause();
-                return;
-            }
-            console.log('Opcao invalida. Usando Lab configurado no config.json.');
-            remoteHost = defaultLabConfig.remoteHost;
-            remotePort = defaultLabConfig.remotePort;
-            sshHost = defaultLabConfig.sshHost;
-        }
     }
 
     const defaultUsername = process.env.USERNAME || process.env.USER || '';
     const username = await questionWithDefault('Usuario SSH', defaultUsername);
     const providerUri = 'http://127.0.0.1:8545';
-    const resultDir = path.join(__dirname, 'result');
-    const outputDir = path.join(resultDir, 'blocos');
-    ensureDir(outputDir);
+    const outputDir = path.join(__dirname, 'result', 'dump', environment.envSlug, monthRange.folderName);
     const totalStages = 4;
 
     try {
-        logStage(1, totalStages, 'Estabelecendo tunel SSH e validando conectividade');
-        await createSSHTunnel(remoteHost, remotePort, username, sshHost);
+        logStage(1, totalStages, `Estabelecendo tunel SSH para ${environment.envLabel}`);
+        await createSSHTunnel(environment.remoteHost, environment.remotePort, username, environment.sshHost);
         console.log('Aguardando estabilizacao do tunel...');
         await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -1033,28 +1062,32 @@ async function exportBlocksWithEthereumEtl() {
         console.log('\nVerificando conectividade com o provider local...');
         await provider.getBlockNumber();
 
-        logStage(2, totalStages, 'Calculando intervalo de blocos a partir das datas');
+        logStage(2, totalStages, 'Calculando intervalo de blocos a partir do mes informado');
         const dater = new EthDater(provider);
         const startBlockData = await withProgressFeedback(
-            'Calculando bloco inicial a partir da data informada',
-            () => dater.getDate(startDate, true, false)
+            'Calculando bloco inicial a partir do primeiro dia do mes',
+            () => dater.getDate(monthRange.startDate, true, false)
         );
-        const endExclusiveDate = addDays(endDate, 1);
+        const endExclusiveDate = addDays(monthRange.endDate, 1);
         const endBlockData = await withProgressFeedback(
-            'Calculando bloco final a partir da data informada',
+            'Calculando bloco final a partir do ultimo dia do mes',
             () => dater.getDate(endExclusiveDate, true, false)
         );
         const startBlock = startBlockData.block;
         const endBlock = endBlockData.block - 1;
 
         if (endBlock < startBlock) {
-            throw new Error('Intervalo de blocos invalido calculado a partir das datas informadas.');
+            throw new Error('Intervalo de blocos invalido calculado a partir do mes informado.');
         }
 
-        console.log(`\nBloco inicial: ${startBlock}`);
+        console.log(`\nAmbiente: ${environment.envLabel}`);
+        console.log(`Mes de referencia: ${monthRange.folderName}`);
+        console.log(`Bloco inicial: ${startBlock}`);
         console.log(`Bloco final: ${endBlock}`);
         console.log(`Diretorio de saida: ${outputDir}\n`);
-        logStage(3, totalStages, 'Exportando blocos com ethereum-etl');
+
+        logStage(3, totalStages, 'Exportando dump com ethereum-etl');
+        resetDir(outputDir);
         console.log('Iniciando exportacao com ethereum-etl. Isso pode levar varios minutos.');
 
         await runCommand('ethereumetl', [
@@ -1069,14 +1102,102 @@ async function exportBlocksWithEthereumEtl() {
             progressIntervalMs: 20000
         });
 
-        logStage(4, totalStages, 'Finalizando exportacao');
-        console.log('\nExportacao concluida com sucesso!');
+        logStage(4, totalStages, 'Finalizando dump local');
+        console.log('\nDump concluido com sucesso!');
         console.log(`Arquivos salvos em: ${outputDir}`);
     } catch (error) {
         console.log(`\nERRO: ${error.message}`);
         console.log('Verifique suas credenciais SSH, conectividade e se o pacote ethereum-etl esta instalado.');
     } finally {
         closeSSHTunnel();
+    }
+
+    await pause();
+}
+
+async function publishRbbDumpToNetworkFolder() {
+    console.log('\n--- Publica dump RBB para pasta da rede ---\n');
+
+    const defaultPeriod = getDefaultMonthPeriod();
+    const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
+
+    let folderName;
+    try {
+        folderName = getMonthDateRange(referencePeriod).folderName;
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    const publishPlan = [
+        {
+            envName: 'LAB',
+            label: 'lab',
+            sourceDir: path.join(__dirname, 'result', 'dump', 'lab', folderName),
+            targetBaseDir: getDumpNetworkBaseDir('LAB')
+        },
+        {
+            envName: 'PROD',
+            label: 'prd',
+            sourceDir: path.join(__dirname, 'result', 'dump', 'prd', folderName),
+            targetBaseDir: getDumpNetworkBaseDir('PROD')
+        }
+    ];
+
+    const availablePlans = publishPlan.filter(item => fs.existsSync(item.sourceDir));
+
+    if (availablePlans.length === 0) {
+        console.log(`Nenhum dump local encontrado para ${folderName}.`);
+        console.log(`Verifique se existem as pastas result\\dump\\lab\\${folderName} e/ou result\\dump\\prd\\${folderName}.`);
+        await pause();
+        return;
+    }
+
+    console.log(`Dumps locais encontrados para copia: ${availablePlans.map(item => item.label).join(' e ')}.`);
+
+    for (const plan of availablePlans) {
+        if (!plan.targetBaseDir) {
+            console.log(`ERRO: Configure ${plan.envName === 'PROD' ? 'DUMP_RBB_PRD_BASE_DIR' : 'DUMP_RBB_LAB_BASE_DIR'} no config.json.`);
+            await pause();
+            return;
+        }
+    }
+
+    try {
+        for (const plan of availablePlans) {
+            const targetDir = path.join(plan.targetBaseDir, folderName);
+            ensureDir(plan.targetBaseDir);
+            ensureDir(targetDir);
+            console.log(`\nCopiando dump ${plan.label}...`);
+            console.log(`Origem: ${plan.sourceDir}`);
+            console.log(`Destino: ${targetDir}`);
+            const copiedFilesCount = publishFlattenedDump(plan.sourceDir, targetDir, folderName);
+            console.log(`Arquivos copiados para a raiz do destino: ${copiedFilesCount}.`);
+        }
+
+        console.log('\nPublicacao concluida com sucesso!');
+        console.log(`Ambientes copiados: ${availablePlans.map(item => item.label).join(' e ')}.`);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+    }
+
+    await pause();
+}
+
+async function issueMetrics() {
+    console.log('\n--- Issues em Producao ---\n');
+
+    const defaults = getDefaultMonthDateRange();
+    const startDate = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaults.startDate);
+    const endDate = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaults.endDate);
+
+    rl.close();
+
+    try {
+        await runNode(path.join(__dirname, 'Issues', 'issue-metrics.js'), [startDate, endDate]);
+    } finally {
+        rl = createReadlineInterface();
     }
 
     await pause();

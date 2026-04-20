@@ -41,6 +41,8 @@ Campos do perfil Evolucao:
 Campos do perfil Operacao:
 
 - `INDICADORES_BASE_DIR`
+- `DUMP_RBB_PRD_BASE_DIR`
+- `DUMP_RBB_LAB_BASE_DIR`
 - `SSH.LAB`
 - `SSH.PROD`
 
@@ -76,17 +78,20 @@ Pontos de entrada disponiveis:
 
 Use `node run-operacao.js` para acessar:
 
-1. Exportar Blocos (ethereum-etl)
-2. Metricas de Producao de Blocos
-3. Estatisticas do Tempo de Producao de Blocos
-4. Issues em Producao
-5. Gerar HTML Operacional
-6. Help
-7. Sair
+1. Dump RBB (ethereum-etl) para pasta local
+2. Publica dump RBB para pasta da rede
+3. Metricas de Producao de Blocos
+4. Estatisticas do Tempo de Producao de Blocos
+5. Issues em Producao
+6. Gerar HTML Operacional
+7. Help
+8. Sair
 
 Observacoes:
 
-- As metricas de blocos e a exportacao usam tunel SSH.
+- O dump local e as metricas de blocos usam tunel SSH com ambiente Lab ou Prd configurado no `config.json`.
+- O dump local mensal e salvo em `result/dump/lab/AAAA-MM` ou `result/dump/prd/AAAA-MM`.
+- A publicacao para rede procura os dumps locais do mes informado, percorre as subpastas do `ethereum-etl`, copia os arquivos encontrados para a raiz de `DUMP_RBB_LAB_BASE_DIR/AAAA-MM` e `DUMP_RBB_PRD_BASE_DIR/AAAA-MM` e renomeia os arquivos para o padrao `tipoAAAA-MM.csv`.
 - O HTML operacional gera `result/Indicadores-operacao.html`.
 - O HTML operacional usa o historico em `INDICADORES_BASE_DIR` e inclui incidentes quando `result/Incidentes.csv` estiver disponivel.
 - Se `result/Incidentes.csv` nao existir, o HTML e gerado sem a secao de incidentes e o aviso aparece no terminal.
