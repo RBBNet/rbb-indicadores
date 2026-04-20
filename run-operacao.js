@@ -762,7 +762,7 @@ function getMenuHelpText(option) {
             'Valores default:',
             '- Mes: mes anterior ao atual.',
             '- Ano: ano correspondente ao mes anterior.',
-            '- Caminho do arquivo: \\bndes.net\\bndes\\Grupos\\BNDES Blockchain\\RBB\\Infra\\DadosPiloto\\AAAA-MM\\blocksAAAA-MM.csv, montado a partir do mes e ano informados.',
+            '- Caminho do arquivo: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM\\blocksAAAA-MM.csv, montado a partir do mes e ano informados.',
             '',
             'Origem dos dados de entrada:',
             '- O arquivo de origem e um CSV de blocos localizado na rede corporativa, no caminho informado pelo usuario.',
@@ -976,7 +976,11 @@ async function blockAnalytics() {
 
     const refMonth = await questionWithDefault('Digite o mes de referencia (MM)', defaultMonth);
     const refYear = await questionWithDefault('Digite o ano de referencia (AAAA)', defaultYear);
-    const defaultPath = `\\\\bndes.net\\bndes\\Grupos\\BNDES Blockchain\\RBB\\Infra\\DadosPiloto\\${refYear}-${refMonth}\\blocks${refYear}-${refMonth}.csv`;
+    const defaultPath = path.join(
+        config.DUMP_RBB_PRD_BASE_DIR,
+        `${refYear}-${refMonth}`,
+        `blocks${refYear}-${refMonth}.csv`
+    );
     const blocksPath = await questionWithDefault('Arquivo de blocos', defaultPath);
 
     console.log('\nVerificando se o arquivo existe...');

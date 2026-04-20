@@ -99,7 +99,7 @@ Quantil 99%: xxxx s
 Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o processo é facilitado:
 
 1. O script solicita o mês (MM) e ano (AAAA) de referência
-2. Sugere automaticamente o caminho padrão na rede: `\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\AAAA-MM\blocksAAAA-MM.csv`
+2. Sugere automaticamente o caminho padrão na rede a partir de `DUMP_RBB_PRD_BASE_DIR`: `DUMP_RBB_PRD_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv`
 3. Permite confirmar ou informar um caminho alternativo
 4. Copia o arquivo para a pasta local `Blocks\` (devido ao tamanho do arquivo)
 5. Processa as estatísticas
@@ -111,7 +111,7 @@ Digite o mes de referencia (MM): 11
 Digite o ano de referencia (AAAA): 2025
 
 Caminho padrao sugerido:
-\\bndes.net\bndes\Grupos\BNDES Blockchain\RBB\Infra\DadosPiloto\2025-11\blocks2025-11.csv
+DUMP_RBB_PRD_BASE_DIR\2025-11\blocks2025-11.csv
 
 Deseja usar este caminho? (S/N): S
 Arquivo encontrado. Copiando para pasta local...
