@@ -639,7 +639,8 @@ function getMenuHelpText(option) {
             '- O script percorre mes a mes do periodo inicial ao final e tenta ler, para cada mes, os arquivos Blocos.csv e Blocos-estat.txt.',
             '- Esses arquivos mensais sao lidos da pasta definida em config.json pela chave INDICADORES_BASE_DIR, normalmente em subpastas no formato AAAA-MM.',
             '- Se existir, o arquivo result\\Incidentes.csv e incluido como entrada adicional.',
-            '- Se result\\Incidentes.csv nao existir, o HTML e gerado sem incidentes.',
+            '- Se result\\Incidentes.csv nao existir, o HTML e gerado sem incidentes e o aviso aparece no terminal.',
+            '- Se faltar Blocos.csv ou Blocos-estat.txt em algum mes do intervalo, esse mes e ignorado na consolidacao.',
             '',
             'Saidas geradas:',
             '- Arquivo result\\Indicadores-operacao.html gerado por Blocks\\block-report.js.'

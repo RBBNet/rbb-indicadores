@@ -81,13 +81,16 @@ Use `node run-operacao.js` para acessar:
 3. Estatisticas do Tempo de Producao de Blocos
 4. Issues em Producao
 5. Gerar HTML Operacional
-6. Sair
+6. Help
+7. Sair
 
 Observacoes:
 
 - As metricas de blocos e a exportacao usam tunel SSH.
 - O HTML operacional gera `result/Indicadores-operacao.html`.
 - O HTML operacional usa o historico em `INDICADORES_BASE_DIR` e inclui incidentes quando `result/Incidentes.csv` estiver disponivel.
+- Se `result/Incidentes.csv` nao existir, o HTML e gerado sem a secao de incidentes e o aviso aparece no terminal.
+- Se faltar `Blocos.csv` ou `Blocos-estat.txt` em algum mes do periodo, esse mes e ignorado na consolidacao do HTML operacional.
 
 ## Perfil Evolucao
 
