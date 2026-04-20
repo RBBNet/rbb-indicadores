@@ -520,6 +520,171 @@ async function selectIncidentsFile(resultDir) {
     return incidentsPath;
 }
 
+function getMenuHelpText(option) {
+    const details = {
+        '1': [
+            'Opcao 1 - Exportar Blocos (ethereum-etl)',
+            '',
+            'Objetivo:',
+            'Exporta dados brutos da blockchain para a pasta result\\blocos usando o ethereum-etl.',
+            '',
+            'Entradas solicitadas:',
+            '- Data inicial no formato DD/MM/AAAA.',
+            '- Data final no formato DD/MM/AAAA.',
+            '- Ambiente do tunel SSH: Lab, Prod ou Customizado.',
+            '- Usuario SSH.',
+            '',
+            'Valores default:',
+            '- Data inicial: primeiro dia do mes anterior.',
+            '- Data final: ultimo dia do mes anterior.',
+            '- Porta remota do ambiente customizado: 8545.',
+            '- Usuario SSH: valor de USERNAME ou USER do sistema.',
+            '',
+            'Origem dos dados de entrada:',
+            '- Os hosts Lab e Prod vem de config.json, no objeto SSH.',
+            '- A consulta aos blocos e feita no node blockchain acessado via tunel SSH local em http://127.0.0.1:8545.',
+            '',
+            'Saidas geradas:',
+            '- Diretorio result\\blocos com subpastas e arquivos exportados pelo ethereum-etl, como blocks, transactions, logs, receipts, token_transfers, tokens e contracts.',
+            '- O intervalo de blocos calculado e exibido na tela antes da exportacao.'
+        ],
+        '2': [
+            'Opcao 2 - Metricas de Producao de Blocos',
+            '',
+            'Objetivo:',
+            'Calcula metricas operacionais de producao de blocos a partir de um provider acessado por tunel SSH.',
+            '',
+            'Entradas solicitadas:',
+            '- Data inicial no formato DD/MM/AAAA.',
+            '- Data final no formato DD/MM/AAAA.',
+            '- Ambiente do tunel SSH: Lab, Prod ou Customizado.',
+            '- Usuario SSH.',
+            '',
+            'Valores default:',
+            '- Data inicial: primeiro dia do mes anterior.',
+            '- Data final: ultimo dia do mes anterior.',
+            '- Porta remota do ambiente customizado: 8545.',
+            '- Usuario SSH: valor de USERNAME ou USER do sistema.',
+            '',
+            'Origem dos dados de entrada:',
+            '- Configuracoes Lab e Prod sao lidas de config.json, no objeto SSH.',
+            '- O provider usado pelo processamento e http://localhost:8545, exposto pelo tunel SSH.',
+            '- Os arquivos nodes_lab.json e nodes_piloto.json sao baixados do repositorio GitHub RBBNet/participantes para a pasta result, caso nao existam localmente ou o usuario escolha sobrescrever.',
+            '',
+            'Saidas geradas:',
+            '- Arquivos CSV de metricas gravados na pasta result pelo script Blocks\\block-metrics.js.',
+            '- Logs do processamento exibidos no terminal durante a execucao.'
+        ],
+        '3': [
+            'Opcao 3 - Estatisticas do Tempo de Producao de Blocos',
+            '',
+            'Objetivo:',
+            'Processa um CSV mensal de blocos e gera estatisticas textuais de tempo de producao.',
+            '',
+            'Entradas solicitadas:',
+            '- Mes de referencia no formato MM.',
+            '- Ano de referencia no formato AAAA.',
+            '- Caminho do arquivo CSV de blocos.',
+            '',
+            'Valores default:',
+            '- Mes: mes anterior ao atual.',
+            '- Ano: ano correspondente ao mes anterior.',
+            '- Caminho do arquivo: \\bndes.net\\bndes\\Grupos\\BNDES Blockchain\\RBB\\Infra\\DadosPiloto\\AAAA-MM\\blocksAAAA-MM.csv, montado a partir do mes e ano informados.',
+            '',
+            'Origem dos dados de entrada:',
+            '- O arquivo de origem e um CSV de blocos localizado na rede corporativa, no caminho informado pelo usuario.',
+            '- Esse arquivo e copiado para a pasta local Blocks antes do processamento.',
+            '',
+            'Saidas geradas:',
+            '- Arquivo temporario local em Blocks\\blocksAAAA-MM.csv.',
+            '- Arquivo result\\Blocos-estat.txt com as estatisticas geradas por Blocks\\block-analytics.js.'
+        ],
+        '4': [
+            'Opcao 4 - Issues em Producao',
+            '',
+            'Objetivo:',
+            'Executa a coleta e consolidacao de issues de producao para o periodo informado.',
+            '',
+            'Entradas solicitadas:',
+            '- Data inicial no formato DD/MM/AAAA.',
+            '- Data final no formato DD/MM/AAAA.',
+            '',
+            'Valores default:',
+            '- Data inicial: primeiro dia do mes anterior.',
+            '- Data final: ultimo dia do mes anterior.',
+            '',
+            'Origem dos dados de entrada:',
+            '- O script Issues\\issue-metrics.js recebe apenas o intervalo de datas pelo menu.',
+            '- As demais fontes consultadas dependem da implementacao interna desse script.',
+            '',
+            'Saidas geradas:',
+            '- Arquivos de saida produzidos por Issues\\issue-metrics.js, tipicamente na pasta result.',
+            '- Logs do processamento mostrados no terminal.'
+        ],
+        '5': [
+            'Opcao 5 - Gerar HTML Operacional',
+            '',
+            'Objetivo:',
+            'Gera um HTML consolidado com indicadores operacionais para todos os meses do intervalo informado.',
+            '',
+            'Entradas solicitadas:',
+            '- Periodo inicial no formato MM/AAAA.',
+            '- Periodo final no formato MM/AAAA.',
+            '',
+            'Valores default:',
+            '- Periodo inicial: inicio do semestre corrente de acompanhamento. Se a data atual estiver no primeiro semestre, usa 07 do ano anterior; se estiver no segundo semestre, usa 01 do ano atual.',
+            '- Periodo final: mes anterior ao atual.',
+            '',
+            'Origem dos dados de entrada:',
+            '- O script percorre mes a mes do periodo inicial ao final e tenta ler, para cada mes, os arquivos Blocos.csv e Blocos-estat.txt.',
+            '- Esses arquivos mensais sao lidos da pasta definida em config.json pela chave INDICADORES_BASE_DIR, normalmente em subpastas no formato AAAA-MM.',
+            '- Se existir, o arquivo result\\Incidentes.csv e incluido como entrada adicional.',
+            '- Se result\\Incidentes.csv nao existir, o HTML e gerado sem incidentes.',
+            '',
+            'Saidas geradas:',
+            '- Arquivo result\\Indicadores-operacao.html gerado por Blocks\\block-report.js.'
+        ],
+        '6': [
+            'Opcao 6 - Help',
+            '',
+            'Objetivo:',
+            'Permite escolher uma opcao do menu e ver a descricao detalhada de funcionamento, entradas, defaults e saidas.'
+        ],
+        '7': [
+            'Opcao 7 - Sair',
+            '',
+            'Objetivo:',
+            'Fecha o menu operacional, encerra a interface readline e finaliza o processo.'
+        ]
+    };
+
+    return details[option] || null;
+}
+
+async function showHelpMenu() {
+    console.log('\n--- Help do Menu Operacional ---\n');
+    console.log('Escolha a opcao que deseja detalhar:');
+    console.log('1. Exportar Blocos (ethereum-etl)');
+    console.log('2. Metricas de Producao de Blocos');
+    console.log('3. Estatisticas do Tempo de Producao de Blocos');
+    console.log('4. Issues em Producao');
+    console.log('5. Gerar HTML Operacional');
+    console.log('6. Help');
+    console.log('7. Sair');
+
+    const option = await question('Qual opcao deseja detalhar (1-7)? ');
+    const helpText = getMenuHelpText(option.trim());
+
+    if (!helpText) {
+        console.log('\nOpcao invalida!');
+        await pause();
+        return;
+    }
+
+    console.log(`\n${helpText.join('\n')}`);
+    await pause();
+}
+
 async function showMenu() {
     clearScreen();
     console.log('==========================================');
@@ -530,10 +695,11 @@ async function showMenu() {
     console.log('3. Estatisticas do Tempo de Producao de Blocos');
     console.log('4. Issues em Producao');
     console.log('5. Gerar HTML Operacional');
-    console.log('6. Sair');
+    console.log('6. Help');
+    console.log('7. Sair');
     console.log('==========================================');
 
-    const choice = await question('Escolha uma opcao (1-6): ');
+    const choice = await question('Escolha uma opcao (1-7): ');
 
     try {
         switch (choice.trim()) {
@@ -553,6 +719,9 @@ async function showMenu() {
                 await operationalHtmlReport();
                 break;
             case '6':
+                await showHelpMenu();
+                break;
+            case '7':
                 console.log('Saindo...');
                 rl.close();
                 process.exit(0);
