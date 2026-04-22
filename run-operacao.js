@@ -666,13 +666,66 @@ process.on('SIGTERM', () => {
     process.exit(0);
 });
 
-async function selectIncidentsFile(resultDir) {
-    const incidentsPath = path.join(resultDir, 'Incidentes.csv');
+async function selectIncidentsFile(baseDir, folderName) {
+    const incidentsPath = path.join(baseDir, folderName, 'Incidentes.csv');
     if (!fs.existsSync(incidentsPath)) {
-        console.log('Aviso: arquivo result\\Incidentes.csv nao encontrado. O HTML operacional sera gerado sem incidentes.');
+        console.log(`Aviso: arquivo ${incidentsPath} nao encontrado. O HTML operacional sera gerado sem incidentes.`);
         return null;
     }
     return incidentsPath;
+}
+
+function collectIndicatorFilesForPublication(monthDir) {
+    const sources = [
+        { sourceDir: path.join(monthDir, 'lab'), prefix: 'lab' },
+        { sourceDir: path.join(monthDir, 'prd'), prefix: 'prd' }
+    ];
+    const items = [];
+    const tempDir = path.join(monthDir, 'prd', 'temp');
+    const resultRootDir = path.join(__dirname, 'result');
+    const metadataFiles = ['nodes_lab.json', 'nodes_piloto.json'];
+
+    for (const source of sources) {
+        if (!fs.existsSync(source.sourceDir)) {
+            continue;
+        }
+
+        const files = collectLeafFiles(source.sourceDir).filter(filePath => !filePath.startsWith(`${tempDir}${path.sep}`));
+        for (const filePath of files) {
+            items.push({
+                sourceFilePath: filePath,
+                targetFileName: path.basename(filePath),
+                relativeSourcePath: path.relative(monthDir, filePath)
+            });
+        }
+    }
+
+    for (const metadataFile of metadataFiles) {
+        const sourceFilePath = path.join(resultRootDir, metadataFile);
+        if (!fs.existsSync(sourceFilePath)) {
+            continue;
+        }
+
+        items.push({
+            sourceFilePath,
+            targetFileName: metadataFile,
+            relativeSourcePath: metadataFile
+        });
+    }
+
+    return items.sort((a, b) => a.relativeSourcePath.localeCompare(b.relativeSourcePath));
+}
+
+function printFileList(title, files) {
+    console.log(title);
+    if (!files || files.length === 0) {
+        console.log(' - (nenhum)');
+        return;
+    }
+
+    for (const file of files) {
+        console.log(` - ${file}`);
+    }
 }
 
 function getMenuHelpText(option) {
@@ -705,7 +758,7 @@ function getMenuHelpText(option) {
             '- O intervalo de blocos calculado e exibido na tela antes da exportacao.'
         ],
         '2': [
-            'Opcao 2 - Publica dump RBB para pasta da rede',
+            'Opcao 2 - Publica dump RBB para pasta de infra',
             '',
             'Objetivo:',
             'Copia para a rede os dumps locais de Lab e Prd que existirem para o mes selecionado, tolerando dumps parciais e compatibilizando formatos novo e legado.',
@@ -823,7 +876,35 @@ function getMenuHelpText(option) {
             '- Logs do processamento mostrados no terminal.'
         ],
         '6': [
-            'Opcao 6 - Gerar HTML Operacional',
+            'Opcao 6 - Publicar indicadores na pasta final',
+            '',
+            'Objetivo:',
+            'Copia os indicadores finais do mes selecionado da pasta local result para a pasta final em INDICADORES_BASE_DIR.',
+            '',
+            'Entradas solicitadas:',
+            '- Mes de referencia no formato MM/AAAA.',
+            '- Confirmacao unica apos a exibicao das listas de arquivos locais e do destino.',
+            '',
+            'Valores default:',
+            '- Mes de referencia: mes anterior ao atual.',
+            '- Pasta default de origem local: result\\AAAA-MM.',
+            '- Pastas locais consideradas: result\\AAAA-MM\\lab e result\\AAAA-MM\\prd.',
+            '- Arquivos auxiliares adicionais publicados a partir da raiz de result: nodes_lab.json e nodes_piloto.json.',
+            '- Pasta ignorada na publicacao: result\\AAAA-MM\\prd\\temp.',
+            '- Pasta default de destino final: INDICADORES_BASE_DIR\\AAAA-MM.',
+            '',
+            'Origem dos dados de entrada:',
+            '- O sistema procura arquivos finais em result\\AAAA-MM\\lab e result\\AAAA-MM\\prd.',
+            '- O sistema tambem procura, na raiz de result, os arquivos nodes_lab.json e nodes_piloto.json para publicar junto com os indicadores do mes.',
+            '- A pasta result\\AAAA-MM\\prd\\temp e excluida por conter apenas artefatos temporarios.',
+            '- Os arquivos existentes em INDICADORES_BASE_DIR\\AAAA-MM, quando houver, sao listados antes da confirmacao.',
+            '',
+            'Saidas geradas:',
+            '- Copia plana dos arquivos finais e dos metadados nodes_*.json para a raiz de INDICADORES_BASE_DIR\\AAAA-MM.',
+            '- Logs no terminal mostrando a lista local, a lista do destino e o total de arquivos copiados.'
+        ],
+        '7': [
+            'Opcao 7 - Gerar HTML Operacional',
             '',
             'Objetivo:',
             'Gera um HTML consolidado com indicadores operacionais para todos os meses do intervalo informado.',
@@ -836,28 +917,35 @@ function getMenuHelpText(option) {
             '- Periodo inicial: inicio do semestre corrente de acompanhamento. Se a data atual estiver no primeiro semestre, usa 07 do ano anterior; se estiver no segundo semestre, usa 01 do ano atual.',
             '- Periodo final: mes anterior ao atual.',
             '- Pasta default de leitura dos arquivos mensais: INDICADORES_BASE_DIR\\AAAA-MM.',
-            '- Nomes default dos arquivos mensais lidos: Blocos.csv e Blocos-estat.txt.',
-            '- Pasta default de saida: result.',
+            '- Nomes default dos arquivos mensais lidos em Prd: Blocos.csv e Blocos-estat.txt.',
+            '- Nome default do arquivo mensal lido em Lab: Blocos_lab.csv.',
+            '- Pasta default do arquivo de incidentes: INDICADORES_BASE_DIR\\AAAA-MM-final.',
+            '- Nome default do arquivo de incidentes: Incidentes.csv.',
+            '- Pasta default de saida local: result\\AAAA-MM-final.',
+            '- Pasta default de saida final: INDICADORES_BASE_DIR\\AAAA-MM-final.',
             '- Nome default do arquivo de saida: Indicadores-operacao.html.',
             '',
             'Origem dos dados de entrada:',
-            '- O script percorre mes a mes do periodo inicial ao final e tenta ler, para cada mes, os arquivos Blocos.csv e Blocos-estat.txt.',
+            '- O script percorre mes a mes do periodo inicial ao final e tenta ler, para cada mes, os arquivos Blocos.csv e Blocos-estat.txt para a consolidacao principal de Prd.',
+            '- Quando existir no mesmo mes, o arquivo Blocos_lab.csv tambem e lido para gerar a tabela equivalente de producao de Lab.',
             '- Esses arquivos mensais sao lidos da pasta definida em config.json pela chave INDICADORES_BASE_DIR, normalmente em subpastas no formato AAAA-MM.',
-            '- Se existir, o arquivo result\\Incidentes.csv e incluido como entrada adicional.',
-            '- Se result\\Incidentes.csv nao existir, o HTML e gerado sem incidentes e o aviso aparece no terminal.',
+            '- Se existir, o arquivo INDICADORES_BASE_DIR\\AAAA-MM-final\\Incidentes.csv do ultimo mes da faixa e incluido como entrada adicional.',
+            '- Se esse arquivo nao existir, o HTML e gerado sem incidentes e o aviso aparece no terminal.',
             '- Se faltar Blocos.csv ou Blocos-estat.txt em algum mes do intervalo, esse mes e ignorado na consolidacao.',
+            '- Se faltar Blocos_lab.csv em algum mes, apenas a linha correspondente de Lab fica sem dados para aquele mes, sem impedir a geracao do HTML.',
             '',
             'Saidas geradas:',
-            '- Arquivo result\\Indicadores-operacao.html gerado por Blocks\\block-report.js.'
+            '- Arquivo result\\AAAA-MM-final\\Indicadores-operacao.html gerado localmente por Blocks\\block-report.js.',
+            '- Copia do mesmo HTML para INDICADORES_BASE_DIR\\AAAA-MM-final\\Indicadores-operacao.html.'
         ],
-        '7': [
-            'Opcao 7 - Help',
+        '8': [
+            'Opcao 8 - Help',
             '',
             'Objetivo:',
             'Permite escolher uma opcao do menu e ver a descricao detalhada de funcionamento, entradas, defaults e saidas.'
         ],
-        '8': [
-            'Opcao 8 - Sair',
+        '9': [
+            'Opcao 9 - Sair',
             '',
             'Objetivo:',
             'Fecha o menu operacional, encerra a interface readline e finaliza o processo.'
@@ -871,15 +959,16 @@ async function showHelpMenu() {
     console.log('\n--- Help do Menu Operacional ---\n');
     console.log('Escolha a opcao que deseja detalhar:');
     console.log('1. Dump RBB (ethereum-etl) para pasta local');
-    console.log('2. Publica dump RBB para pasta da rede');
+    console.log('2. Publica dump RBB para pasta de infra');
     console.log('3. Proposicao de Blocos por Participe');
     console.log('4. Estatisticas do Tempo de Producao de Blocos');
     console.log('5. Issues em Producao');
-    console.log('6. Gerar HTML Operacional');
-    console.log('7. Help');
-    console.log('8. Sair');
+    console.log('6. Publicar indicadores na pasta final');
+    console.log('7. Gerar HTML Operacional');
+    console.log('8. Help');
+    console.log('9. Sair');
 
-    const option = await question('Qual opcao deseja detalhar (1-8)? ');
+    const option = await question('Qual opcao deseja detalhar (1-9)? ');
     const helpText = getMenuHelpText(option.trim());
 
     if (!helpText) {
@@ -898,16 +987,17 @@ async function showMenu() {
     console.log('      Menu RBB - Perfil Operacao');
     console.log('==========================================');
     console.log('1. Dump RBB (ethereum-etl) para pasta local');
-    console.log('2. Publica dump RBB para pasta da rede');
+    console.log('2. Publica dump RBB para pasta de infra');
     console.log('3. Proposicao de Blocos por Participe');
     console.log('4. Estatisticas do Tempo de Producao de Blocos');
     console.log('5. Issues em Producao');
-    console.log('6. Gerar HTML Operacional');
-    console.log('7. Help');
-    console.log('8. Sair');
+    console.log('6. Publicar indicadores na pasta final');
+    console.log('7. Gerar HTML Operacional');
+    console.log('8. Help');
+    console.log('9. Sair');
     console.log('==========================================');
 
-    const choice = await question('Escolha uma opcao (1-8): ');
+    const choice = await question('Escolha uma opcao (1-9): ');
 
     try {
         switch (choice.trim()) {
@@ -927,12 +1017,15 @@ async function showMenu() {
                 await issueMetrics();
                 break;
             case '6':
-                await operationalHtmlReport();
+                await publishIndicatorsToFinalFolder();
                 break;
             case '7':
-                await showHelpMenu();
+                await operationalHtmlReport();
                 break;
             case '8':
+                await showHelpMenu();
+                break;
+            case '9':
                 console.log('Saindo...');
                 rl.close();
                 process.exit(0);
@@ -1092,18 +1185,41 @@ async function operationalHtmlReport() {
     const startPeriod = await questionWithDefault('Digite o periodo inicial (MM/AAAA)', defaults.startPeriod);
     const endPeriod = await questionWithDefault('Digite o periodo final (MM/AAAA)', defaults.endPeriod);
 
+    let endFolderName;
+    try {
+        endFolderName = getMonthDateRange(endPeriod).folderName;
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
     const resultDir = path.join(__dirname, 'result');
-    const incidentsFile = await selectIncidentsFile(resultDir);
-    const outputPath = path.join(resultDir, 'Indicadores-operacao.html');
+    const indicatorsBaseDir = config.INDICADORES_BASE_DIR;
+    if (!indicatorsBaseDir) {
+        console.log('ERRO: Configure INDICADORES_BASE_DIR no config.json.');
+        await pause();
+        return;
+    }
+
+    const incidentsFile = await selectIncidentsFile(indicatorsBaseDir, endFolderName);
+    const localOutputDir = path.join(resultDir, endFolderName);
+    const localOutputPath = path.join(localOutputDir, 'Indicadores-operacao.html');
+    const finalOutputDir = path.join(indicatorsBaseDir, endFolderName);
+    const finalOutputPath = path.join(finalOutputDir, 'Indicadores-operacao.html');
 
     try {
+        ensureDir(localOutputDir);
         await runNode(path.join(__dirname, 'Blocks', 'block-report.js'), [
             startPeriod,
             endPeriod,
             ...(incidentsFile ? [incidentsFile] : []),
-            outputPath
+            localOutputPath
         ]);
-        console.log(`\nHTML operacional gerado em: ${outputPath}`);
+        ensureNetworkTargetDir(indicatorsBaseDir, finalOutputDir);
+        await copyFile(localOutputPath, finalOutputPath);
+        console.log(`\nHTML operacional gerado em: ${localOutputPath}`);
+        console.log(`HTML operacional copiado para: ${finalOutputPath}`);
     } catch (error) {
         console.log(`ERRO: ${error.message}`);
     }
@@ -1205,7 +1321,7 @@ async function dumpRbbToLocalFolder() {
 }
 
 async function publishRbbDumpToNetworkFolder() {
-    console.log('\n--- Publica dump RBB para pasta da rede ---\n');
+    console.log('\n--- Publica dump RBB para pasta de infra ---\n');
 
     const defaultPeriod = getDefaultMonthPeriod();
     const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
@@ -1273,6 +1389,79 @@ async function publishRbbDumpToNetworkFolder() {
 
         console.log('\nPublicacao concluida com sucesso!');
         console.log(`Ambientes copiados: ${availablePlans.map(item => item.label).join(' e ')}.`);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+    }
+
+    await pause();
+}
+
+async function publishIndicatorsToFinalFolder() {
+    console.log('\n--- Publicar indicadores na pasta final ---\n');
+
+    const defaultPeriod = getDefaultMonthPeriod();
+    const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
+
+    let folderName;
+    try {
+        folderName = getMonthDateRange(referencePeriod).folderName;
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    const sourceMonthDir = path.join(__dirname, 'result', folderName);
+    const targetBaseDir = config.INDICADORES_BASE_DIR;
+    if (!targetBaseDir) {
+        console.log('ERRO: Configure INDICADORES_BASE_DIR no config.json.');
+        await pause();
+        return;
+    }
+
+    const targetDir = path.join(targetBaseDir, folderName);
+    const itemsToPublish = collectIndicatorFilesForPublication(sourceMonthDir);
+    const recommendedMetadataFiles = ['nodes_lab.json', 'nodes_piloto.json'];
+    const missingMetadataFiles = recommendedMetadataFiles.filter(fileName => !fs.existsSync(path.join(__dirname, 'result', fileName)));
+
+    if (itemsToPublish.length === 0) {
+        console.log(`Nenhum arquivo publicavel encontrado em ${sourceMonthDir}.`);
+        console.log(`Verifique se existem arquivos em result\\${folderName}\\lab e/ou result\\${folderName}\\prd.`);
+        await pause();
+        return;
+    }
+
+    const localFiles = itemsToPublish.map(item => item.relativeSourcePath);
+    const destinationFiles = fs.existsSync(targetDir)
+        ? collectLeafFiles(targetDir).map(filePath => path.relative(targetDir, filePath)).sort((a, b) => a.localeCompare(b))
+        : [];
+
+    console.log(`Origem local: ${sourceMonthDir}`);
+    console.log(`Destino final: ${targetDir}`);
+    printFileList('\nArquivos locais a publicar:', localFiles);
+    printFileList('\nArquivos atualmente no destino:', destinationFiles);
+
+    if (missingMetadataFiles.length > 0) {
+        console.log(`\nAviso: arquivos auxiliares nao encontrados na raiz de result e que, por isso, nao serao publicados: ${missingMetadataFiles.join(', ')}.`);
+    }
+
+    const confirmation = await questionWithDefault('Confirmar publicacao final de todos os arquivos listados? (s/n)', 'n');
+    if (confirmation.trim().toLowerCase() !== 's') {
+        console.log('Publicacao final cancelada pelo usuario.');
+        await pause();
+        return;
+    }
+
+    try {
+        ensureNetworkTargetDir(targetBaseDir, targetDir);
+        for (const item of itemsToPublish) {
+            const targetFilePath = path.join(targetDir, item.targetFileName);
+            fs.copyFileSync(item.sourceFilePath, targetFilePath);
+        }
+
+        console.log('\nPublicacao final concluida com sucesso!');
+        console.log(`Arquivos copiados: ${itemsToPublish.length}.`);
+        console.log(`Destino: ${targetDir}`);
     } catch (error) {
         console.log(`ERRO: ${error.message}`);
     }

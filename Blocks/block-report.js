@@ -7,18 +7,7 @@ const __dirname = path.dirname(__filename);
 
 const RESULT_DIR = path.resolve(__dirname, '..', 'result');
 const DEFAULT_OUTPUT_PATH = path.join(RESULT_DIR, 'Indicadores-operacao.html');
-
-const ORG_ORDER = [
-    { key: 'BNDES', label: 'BNDES' },
-    { key: 'CPQD', label: 'CPQD' },
-    { key: 'DATAPREV', label: 'Dataprev' },
-    { key: 'IBICT', label: 'IBICT' },
-    { key: 'PRODEMGE', label: 'Prodemge' },
-    { key: 'RNP', label: 'RNP' },
-    { key: 'SERPRO', label: 'Serpro' },
-    { key: 'SGD', label: 'SGD' },
-    { key: 'TCU', label: 'TCU' }
-];
+const MONTH_LABELS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 function loadConfig() {
     const configPath = path.resolve(__dirname, '..', 'config.json');
@@ -63,10 +52,73 @@ function parseCsvBlocks(content) {
         }
         const org = parts[0].trim();
         const value = parts[1].trim();
-        orgMap.set(org.toUpperCase(), value);
+        orgMap.set(normalizeOrganizationKey(org), { label: org, value });
     }
 
     return { headerMap, orgMap };
+}
+
+function normalizeOrganizationKey(value) {
+    return normalizeKey(value);
+}
+
+function buildParticipantsFromCsv(orgMap) {
+    return [...orgMap.entries()].map(([key, entry]) => ({ key, label: entry.label }));
+}
+
+function mergeParticipants(target, source) {
+    const existing = new Set(target.map(item => item.key));
+    for (const participant of source) {
+        if (existing.has(participant.key)) {
+            continue;
+        }
+        target.push(participant);
+        existing.add(participant.key);
+    }
+}
+
+function buildProductionRow(headerMap, orgMap, participants) {
+    const startDate = formatDate(headerMap['Data inicial']);
+    const endDate = formatDate(headerMap['Data final']);
+    const monthLabel = formatMonthLabel(headerMap['Data inicial']);
+    const expectedBlocks = parseInteger(headerMap['Qtd max ideal']);
+    const producedBlocks = parseInteger(headerMap['Blocos produzidos']);
+    const efficiency = parseDecimal(headerMap['Rendimento']);
+    const productionByOrg = new Map();
+    const participantKeys = new Set(participants.map(participant => participant.key));
+
+    for (const participant of participants) {
+        const rawEntry = orgMap.get(participant.key);
+        const produced = rawEntry ? parseInteger(rawEntry.value) : 0;
+        const percent = producedBlocks ? (produced / producedBlocks) * 100 : 0;
+        productionByOrg.set(participant.key, percent);
+    }
+
+    return {
+        startDate,
+        endDate,
+        monthLabel,
+        expectedBlocks,
+        producedBlocks,
+        efficiency,
+        productionByOrg,
+        participantKeys,
+        hasData: true
+    };
+}
+
+function buildEmptyProductionRow({ startDate, endDate, monthLabel }) {
+    return {
+        startDate,
+        endDate,
+        monthLabel,
+        expectedBlocks: null,
+        producedBlocks: null,
+        efficiency: null,
+        productionByOrg: new Map(),
+        participantKeys: new Set(),
+        hasData: false
+    };
 }
 
 function normalizeKey(value) {
@@ -140,8 +192,7 @@ function formatMonthLabel(dateValue) {
     }
     const month = parseInt(parts[1], 10);
     const year = parts[2];
-    const labels = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-    const label = labels[month - 1] || String(month);
+    const label = MONTH_LABELS[month - 1] || String(month);
     return `${label}/${year.slice(-2)}`;
 }
 
@@ -152,8 +203,7 @@ function formatMonthHeader(headerValue) {
     }
     const month = parseInt(match[1], 10);
     const year = match[2];
-    const labels = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-    const label = labels[month - 1] || String(month);
+    const label = MONTH_LABELS[month - 1] || String(month);
     return `${label}/${year.slice(-2)}`;
 }
 
@@ -298,13 +348,22 @@ function buildRowspans(items) {
     return rowspans;
 }
 
-function buildHtml({ rows, initiatives, incidents }) {
-    const productionHeader = ORG_ORDER.map(org => `<th>${org.label}</th>`).join('');
-    const topRows = rows.map(row => {
-        const productionValues = ORG_ORDER.map(org => {
-            const value = row.productionByOrg.get(org.key) ?? 0;
+function buildProductionTableHtml(title, rows, participants) {
+    if (participants.length === 0 || rows.length === 0) {
+        return '';
+    }
+
+    const productionHeader = participants.map(participant => `<th>${participant.label}</th>`).join('');
+    const bodyRows = rows.map(row => {
+        const productionValues = participants.map(participant => {
+            if (!row.participantKeys.has(participant.key)) {
+                return '<td>-</td>';
+            }
+
+            const value = row.productionByOrg.get(participant.key);
             return `<td>${formatPercent(value, 2)}</td>`;
         }).join('');
+
         return `
                 <tr>
                     <td>${row.startDate}</td>
@@ -317,7 +376,38 @@ function buildHtml({ rows, initiatives, incidents }) {
                 </tr>`;
     }).join('');
 
-    const statsRows = rows.map(row => {
+    return `
+    <div class="table-wrap">
+        <table>
+            <caption>${title}</caption>
+            <thead>
+                <tr>
+                    <th colspan="3">Periodo</th>
+                    <th colspan="3">Blocos</th>
+                    <th colspan="${participants.length}">Producao %</th>
+                </tr>
+                <tr>
+                    <th>Inicio</th>
+                    <th>Fim</th>
+                    <th>Mes</th>
+                    <th>Previstos</th>
+                    <th>Produzidos</th>
+                    <th>Eficiencia</th>
+                    ${productionHeader}
+                </tr>
+            </thead>
+            <tbody>
+                ${bodyRows}
+            </tbody>
+        </table>
+    </div>`;
+}
+
+function buildHtml({ prdRows, labRows, prdParticipants, labParticipants, initiatives, incidents }) {
+    const prdTable = buildProductionTableHtml('Producao % - Prd', prdRows, prdParticipants);
+    const labTable = buildProductionTableHtml('Producao % - Lab', labRows, labParticipants);
+
+    const statsRows = prdRows.map(row => {
         return `
                 <tr>
                     <td>${row.monthLabel}</td>
@@ -481,30 +571,8 @@ function buildHtml({ rows, initiatives, incidents }) {
 </style>
 </head>
 <body>
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr>
-                    <th colspan="3">Periodo</th>
-                    <th colspan="3">Blocos</th>
-                    <th colspan="${ORG_ORDER.length}">Producao %</th>
-                </tr>
-                <tr>
-                    <th>Inicio</th>
-                    <th>Fim</th>
-                    <th>Mes</th>
-                    <th>Previstos</th>
-                    <th>Produzidos</th>
-                    <th>Eficiencia</th>
-                    ${productionHeader}
-                </tr>
-            </thead>
-            <tbody>
-                ${topRows}
-            </tbody>
-        </table>
-    </div>
-
+${prdTable}
+${labTable}
     <div class="table-wrap">
         <table>
             <thead>
@@ -549,12 +617,16 @@ function main() {
         throw new Error('INDICADORES_BASE_DIR nao definido no config.json');
     }
 
-    const rows = [];
+    const prdRows = [];
+    const labRows = [];
+    const prdParticipants = [];
+    const labParticipants = [];
     let current = { ...startPeriod };
     while (current.year < endPeriod.year || (current.year === endPeriod.year && current.month <= endPeriod.month)) {
         const folderName = formatFolder(current);
         const folderPath = path.join(baseDir, folderName);
         const csvPath = path.join(folderPath, 'Blocos.csv');
+        const labCsvPath = path.join(folderPath, 'Blocos_lab.csv');
         const statPath = path.join(folderPath, 'Blocos-estat.txt');
 
         if (!fs.existsSync(csvPath) || !fs.existsSync(statPath)) {
@@ -568,25 +640,9 @@ function main() {
 
         const { headerMap, orgMap } = parseCsvBlocks(csvContent);
         const statsMap = parseStats(statContent);
-
-        const startDate = formatDate(headerMap['Data inicial']);
-        const endDate = formatDate(headerMap['Data final']);
-        const monthLabel = formatMonthLabel(headerMap['Data inicial']);
-        const expectedBlocks = parseInteger(headerMap['Qtd max ideal']);
-        const producedBlocks = parseInteger(headerMap['Blocos produzidos']);
-        const efficiency = parseDecimal(headerMap['Rendimento']);
-
-        const productionByOrg = new Map();
-        for (const org of ORG_ORDER) {
-            const rawValue = orgMap.get(org.key);
-            if (!rawValue || !producedBlocks) {
-                productionByOrg.set(org.key, 0);
-                continue;
-            }
-            const produced = parseInteger(rawValue);
-            const percent = producedBlocks ? (produced / producedBlocks) * 100 : 0;
-            productionByOrg.set(org.key, percent);
-        }
+    const prdParticipantsForMonth = buildParticipantsFromCsv(orgMap);
+        mergeParticipants(prdParticipants, prdParticipantsForMonth);
+        const prdRow = buildProductionRow(headerMap, orgMap, prdParticipantsForMonth);
 
         const stats = {
             min: parseDecimal(statsMap['tempo minimo']?.replace('s', '')),
@@ -597,21 +653,26 @@ function main() {
             quantile99: parseDecimal(statsMap['quantil 99%']?.replace('s', ''))
         };
 
-        rows.push({
-            startDate,
-            endDate,
-            monthLabel,
-            expectedBlocks,
-            producedBlocks,
-            efficiency,
-            productionByOrg,
+        prdRows.push({
+            ...prdRow,
             stats
         });
+
+        if (fs.existsSync(labCsvPath)) {
+            const labCsvContent = fs.readFileSync(labCsvPath, 'utf8');
+            const { headerMap: labHeaderMap, orgMap: labOrgMap } = parseCsvBlocks(labCsvContent);
+            const labParticipantsForMonth = buildParticipantsFromCsv(labOrgMap);
+            mergeParticipants(labParticipants, labParticipantsForMonth);
+            labRows.push(buildProductionRow(labHeaderMap, labOrgMap, labParticipantsForMonth));
+        } else {
+            console.warn(`Aviso: arquivo nao encontrado em ${labCsvPath}. A linha de Lab ficara sem dados para ${folderName}.`);
+            labRows.push(buildEmptyProductionRow(prdRow));
+        }
 
         current = nextMonth(current);
     }
 
-    if (rows.length === 0) {
+    if (prdRows.length === 0) {
         throw new Error('Nenhum mes encontrado no periodo informado.');
     }
 
@@ -638,12 +699,19 @@ function main() {
 
         if (normalized === 'incidentes.csv') {
             const items = parseIncidentsCsv(extraArg);
-            const monthLabel = `${['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'][endPeriod.month - 1]}/${String(endPeriod.year).slice(-2)}`;
+            const monthLabel = `${MONTH_LABELS[endPeriod.month - 1]}/${String(endPeriod.year).slice(-2)}`;
             incidentsData = { monthLabel, items };
         }
     }
 
-    const html = buildHtml({ rows, initiatives: initiativesData, incidents: incidentsData });
+    const html = buildHtml({
+        prdRows,
+        labRows,
+        prdParticipants,
+        labParticipants,
+        initiatives: initiativesData,
+        incidents: incidentsData
+    });
 
     if (!fs.existsSync(RESULT_DIR)) {
         fs.mkdirSync(RESULT_DIR, { recursive: true });

@@ -79,25 +79,25 @@ Pontos de entrada disponiveis:
 Use `node run-operacao.js` para acessar:
 
 1. Dump RBB (ethereum-etl) para pasta local
-2. Publica dump RBB para pasta da rede
+2. Publica dump RBB para pasta de infra
 3. Proposicao de Blocos por Participe
 4. Estatisticas do Tempo de Producao de Blocos
 5. Issues em Producao
-6. Gerar HTML Operacional
-7. Help
-8. Sair
+6. Publicar indicadores na pasta final
+7. Gerar HTML Operacional
+8. Help
+9. Sair
 
 Observacoes:
 
 - O dump local e as metricas de blocos usam tunel SSH com ambiente Lab ou Prd configurado no `config.json`.
 - A opcao 3 pede apenas o mes de referencia em `MM/AAAA`, usa internamente o primeiro e o ultimo dia do mes e grava `result/AAAA-MM/lab/Blocos_lab.csv` para Lab ou `result/AAAA-MM/prd/Blocos.csv` para Prd.
 - O dump local mensal e salvo em `result/dump/lab/AAAA-MM/blocksAAAA-MM.csv` ou `result/dump/prd/AAAA-MM/blocksAAAA-MM.csv`.
-- A publicacao para rede procura os dumps locais do mes informado, copia para a raiz de `DUMP_RBB_LAB_BASE_DIR/AAAA-MM` e `DUMP_RBB_PRD_BASE_DIR/AAAA-MM` apenas os arquivos efetivamente presentes e renomeia arquivos legados para o padrao `tipoAAAA-MM.csv`.
+- A opcao 2 publica o dump bruto para as pastas de infra `DUMP_RBB_LAB_BASE_DIR/AAAA-MM` e `DUMP_RBB_PRD_BASE_DIR/AAAA-MM`, copiando apenas os arquivos efetivamente presentes e renomeando arquivos legados para o padrao `tipoAAAA-MM.csv`.
 - A opcao 4 continua usando por default o CSV de blocos de producao em `DUMP_RBB_PRD_BASE_DIR/AAAA-MM/blocksAAAA-MM.csv`, grava o temporario em `result/AAAA-MM/prd/temp/blocksAAAA-MM.csv` e salva o resultado final em `result/AAAA-MM/prd/Blocos-estat.txt`.
 - A opcao 5 consulta a API do GitHub no repositorio `RBBNet/incidentes`, usa `GITHUB_RBB_TOKEN` do `config.json`, pede apenas `MM/AAAA` e grava `result/AAAA-MM/prd/Incidentes.csv`.
-- O HTML operacional gera `result/Indicadores-operacao.html`.
-- O HTML operacional usa o historico em `INDICADORES_BASE_DIR` e, por enquanto, inclui incidentes apenas quando `result/Incidentes.csv` estiver disponivel.
-- Se `result/Incidentes.csv` nao existir, o HTML e gerado sem a secao de incidentes e o aviso aparece no terminal, mesmo que a opcao 5 ja tenha gerado um CSV mensal em `result/AAAA-MM/prd`.
+- A opcao 6 publica os arquivos finais de `result/AAAA-MM/lab` e `result/AAAA-MM/prd` na raiz de `INDICADORES_BASE_DIR/AAAA-MM`, ignora `result/AAAA-MM/prd/temp` e tambem copia `result/nodes_lab.json` e `result/nodes_piloto.json`, depois de mostrar ao usuario as listas local e de destino.
+- A opcao 7 gera o HTML operacional a partir dos arquivos em `INDICADORES_BASE_DIR/AAAA-MM`, monta uma tabela de producao para Prd com `Blocos.csv` e outra para Lab com `Blocos_lab.csv`, usa `Incidentes.csv` do ultimo mes da faixa quando existir e grava `Indicadores-operacao.html` em `INDICADORES_BASE_DIR/AAAA-MM-final` e em `result/AAAA-MM-final`.
 - Se faltar `Blocos.csv` ou `Blocos-estat.txt` em algum mes do periodo, esse mes e ignorado na consolidacao do HTML operacional.
 
 ## Perfil Evolucao
