@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const RESULT_DIR = path.resolve(__dirname, '..', 'result');
 const DEFAULT_OUTPUT_PATH = path.join(RESULT_DIR, 'Indicadores-operacao.html');
 const MONTH_LABELS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const warnedMissingOlaThresholds = new Set();
 
 function loadConfig() {
     const configPath = path.resolve(__dirname, '..', 'config.json');
@@ -16,6 +17,43 @@ function loadConfig() {
     }
     const raw = fs.readFileSync(configPath, 'utf8');
     return JSON.parse(raw);
+}
+
+function getValidatedOlaThresholds(config) {
+    const thresholds = config.BLOCK_PRODUCTION_OLA_THRESHOLDS;
+    if (!thresholds || typeof thresholds !== 'object' || Array.isArray(thresholds)) {
+        throw new Error('BLOCK_PRODUCTION_OLA_THRESHOLDS nao definido ou invalido no config.json');
+    }
+
+    const validated = new Map();
+    for (const [validatorCountKey, values] of Object.entries(thresholds)) {
+        const validatorCount = parseInt(validatorCountKey, 10);
+        if (!Number.isInteger(validatorCount) || validatorCount <= 0) {
+            throw new Error(`Quantidade de validadores invalida em BLOCK_PRODUCTION_OLA_THRESHOLDS: ${validatorCountKey}`);
+        }
+
+        if (!values || typeof values !== 'object' || Array.isArray(values)) {
+            throw new Error(`Configuracao invalida para ${validatorCountKey} validadores em BLOCK_PRODUCTION_OLA_THRESHOLDS`);
+        }
+
+        const yellow = Number(values.yellow);
+        const red = Number(values.red);
+        if (!Number.isFinite(yellow) || !Number.isFinite(red)) {
+            throw new Error(`Valores de OLA invalidos para ${validatorCountKey} validadores: yellow e red devem ser numericos`);
+        }
+
+        if (red >= yellow) {
+            throw new Error(`Valores de OLA invalidos para ${validatorCountKey} validadores: red deve ser menor que yellow`);
+        }
+
+        validated.set(validatorCount, { yellow, red });
+    }
+
+    if (validated.size === 0) {
+        throw new Error('BLOCK_PRODUCTION_OLA_THRESHOLDS vazio no config.json');
+    }
+
+    return validated;
 }
 
 function parseCsvBlocks(content) {
@@ -103,6 +141,7 @@ function buildProductionRow(headerMap, orgMap, participants) {
         efficiency,
         productionByOrg,
         participantKeys,
+        validatorCount: participants.length,
         hasData: true
     };
 }
@@ -117,8 +156,33 @@ function buildEmptyProductionRow({ startDate, endDate, monthLabel }) {
         efficiency: null,
         productionByOrg: new Map(),
         participantKeys: new Set(),
+        validatorCount: null,
         hasData: false
     };
+}
+
+function getOlaCellClass(olaThresholds, validatorCount, percentValue, title, monthLabel) {
+    if (!Number.isFinite(percentValue) || !Number.isInteger(validatorCount) || validatorCount <= 0) {
+        return '';
+    }
+
+    const thresholds = olaThresholds.get(validatorCount);
+    if (!thresholds) {
+        const warningKey = `${title}:${validatorCount}`;
+        if (!warnedMissingOlaThresholds.has(warningKey)) {
+            console.warn(`Aviso: nenhum OLA configurado para ${validatorCount} validadores na tabela ${title}. Mes de referencia: ${monthLabel}.`);
+            warnedMissingOlaThresholds.add(warningKey);
+        }
+        return '';
+    }
+
+    if (percentValue < thresholds.red) {
+        return 'ola-critical';
+    }
+    if (percentValue < thresholds.yellow) {
+        return 'ola-warning';
+    }
+    return '';
 }
 
 function normalizeKey(value) {
@@ -348,7 +412,7 @@ function buildRowspans(items) {
     return rowspans;
 }
 
-function buildProductionTableHtml(title, rows, participants) {
+function buildProductionTableHtml(title, rows, participants, olaThresholds) {
     if (participants.length === 0 || rows.length === 0) {
         return '';
     }
@@ -361,7 +425,9 @@ function buildProductionTableHtml(title, rows, participants) {
             }
 
             const value = row.productionByOrg.get(participant.key);
-            return `<td>${formatPercent(value, 2)}</td>`;
+            const olaClass = getOlaCellClass(olaThresholds, row.validatorCount, value, title, row.monthLabel);
+            const classAttribute = olaClass ? ` class="${olaClass}"` : '';
+            return `<td${classAttribute}>${formatPercent(value, 2)}</td>`;
         }).join('');
 
         return `
@@ -403,9 +469,9 @@ function buildProductionTableHtml(title, rows, participants) {
     </div>`;
 }
 
-function buildHtml({ prdRows, labRows, prdParticipants, labParticipants, initiatives, incidents }) {
-    const prdTable = buildProductionTableHtml('Producao % - Prd', prdRows, prdParticipants);
-    const labTable = buildProductionTableHtml('Producao % - Lab', labRows, labParticipants);
+function buildHtml({ prdRows, labRows, prdParticipants, labParticipants, initiatives, incidents, olaThresholds }) {
+    const prdTable = buildProductionTableHtml('Producao % - Prd', prdRows, prdParticipants, olaThresholds);
+    const labTable = buildProductionTableHtml('Producao % - Lab', labRows, labParticipants, olaThresholds);
 
     const statsRows = prdRows.map(row => {
         return `
@@ -564,6 +630,16 @@ function buildHtml({ prdRows, labRows, prdParticipants, labParticipants, initiat
     .status-empty {
         background: #ffffff;
     }
+    .ola-warning {
+        background: #fef3c7;
+        color: #111827;
+        font-weight: 600;
+    }
+    .ola-critical {
+        background: #fecaca;
+        color: #111827;
+        font-weight: 600;
+    }
     .table-incidents th:nth-child(2),
     .table-incidents td:nth-child(2) {
         text-align: left;
@@ -613,6 +689,7 @@ function main() {
 
     const config = loadConfig();
     const baseDir = config.INDICADORES_BASE_DIR;
+    const olaThresholds = getValidatedOlaThresholds(config);
     if (!baseDir) {
         throw new Error('INDICADORES_BASE_DIR nao definido no config.json');
     }
@@ -640,7 +717,7 @@ function main() {
 
         const { headerMap, orgMap } = parseCsvBlocks(csvContent);
         const statsMap = parseStats(statContent);
-    const prdParticipantsForMonth = buildParticipantsFromCsv(orgMap);
+        const prdParticipantsForMonth = buildParticipantsFromCsv(orgMap);
         mergeParticipants(prdParticipants, prdParticipantsForMonth);
         const prdRow = buildProductionRow(headerMap, orgMap, prdParticipantsForMonth);
 
@@ -709,6 +786,7 @@ function main() {
         labRows,
         prdParticipants,
         labParticipants,
+        olaThresholds,
         initiatives: initiativesData,
         incidents: incidentsData
     });

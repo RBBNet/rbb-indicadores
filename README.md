@@ -43,6 +43,7 @@ Campos do perfil Operacao:
 - `INDICADORES_BASE_DIR`
 - `DUMP_RBB_PRD_BASE_DIR`
 - `DUMP_RBB_LAB_BASE_DIR`
+- `BLOCK_PRODUCTION_OLA_THRESHOLDS`
 - `SSH.LAB`
 - `SSH.PROD`
 
@@ -98,6 +99,8 @@ Observacoes:
 - A opcao 5 consulta a API do GitHub no repositorio `RBBNet/incidentes`, usa `GITHUB_RBB_TOKEN` do `config.json`, pede apenas `MM/AAAA` e grava `result/AAAA-MM/prd/Incidentes.csv`.
 - A opcao 6 publica os arquivos finais de `result/AAAA-MM/lab` e `result/AAAA-MM/prd` na raiz de `INDICADORES_BASE_DIR/AAAA-MM`, ignora `result/AAAA-MM/prd/temp` e tambem copia `result/nodes_lab.json` e `result/nodes_piloto.json`, depois de mostrar ao usuario as listas local e de destino.
 - A opcao 7 gera o HTML operacional a partir dos arquivos em `INDICADORES_BASE_DIR/AAAA-MM`, monta uma tabela de producao para Prd com `Blocos.csv` e outra para Lab com `Blocos_lab.csv`, usa `Incidentes.csv` do ultimo mes da faixa quando existir e grava `Indicadores-operacao.html` em `INDICADORES_BASE_DIR/AAAA-MM-final` e em `result/AAAA-MM-final`.
+- As celulas de percentagem de producao no HTML sao coloridas conforme `BLOCK_PRODUCTION_OLA_THRESHOLDS` do `config.json`, usando a quantidade de partícipes/validadores presente no CSV do ambiente para escolher os limiares de alerta amarelo e vermelho.
+- Se nao houver OLA configurado para a quantidade de partícipes encontrada em um mes, o HTML continua sendo gerado sem coloracao para aquele caso e com aviso no terminal.
 - Se faltar `Blocos.csv` ou `Blocos-estat.txt` em algum mes do periodo, esse mes e ignorado na consolidacao do HTML operacional.
 
 ## Perfil Evolucao

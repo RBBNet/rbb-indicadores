@@ -4,6 +4,8 @@ Essa ferramenta realiza consultas a um nó da RBB para extração de métricas r
 
 Quando executada pelo menu operacional, a ferramenta pede um mes de referencia em `MM/AAAA`, converte esse valor internamente para o primeiro e o ultimo dia do mes e grava a saida em `result/AAAA-MM/lab/Blocos_lab.csv` para o ambiente Lab ou em `result/AAAA-MM/prd/Blocos.csv` para o ambiente Prd.
 
+Na geracao do HTML operacional, os percentuais dessas tabelas podem receber coloracao de alerta conforme a chave `BLOCK_PRODUCTION_OLA_THRESHOLDS` do `config.json`. A regra usa a quantidade de partícipes/validadores presente no CSV do ambiente para escolher os limiares amarelo e vermelho. Valores abaixo de `red` ficam em alerta vermelho; valores abaixo de `yellow` ficam em alerta amarelo; sem configuracao para aquela quantidade, o HTML segue sem coloracao para aquele caso.
+
 ## Requisitos
 
 Para utilizar essa ferramenta é necessário:
