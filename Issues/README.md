@@ -32,7 +32,7 @@ Em caso de dúvidas sobre como gerar o Token de acesso à API do GitHub, confira
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 
 ```bash
-node Issues/issue-metrics.js <data inicial> <data final>
+node Issues/issue-metrics.js <data inicial> <data final> [pasta-mensal]
 ```
 
 Onde:
@@ -41,6 +41,7 @@ Onde:
   - `<data inicial>` deve ser anterior ou igual a `<data final>`.
   - `<data final>` deve ser anterior ou igual à data corrente.
   - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
+- `[pasta-mensal]` é opcional e define a subpasta de saída sob `result`, normalmente no formato `AAAA-MM`. Quando informada, a saída é gravada em `result/AAAA-MM/prd/Incidentes.csv`.
 
 A ferramenta retorna mensagens como as exemplificadas abaixo e gera um arquivo CSV, conforme indicado:
 
@@ -70,6 +71,22 @@ ISSUES FOR vulnerabilidade-critica + PRD
 --------------------------------------------------
 No issues found for label: vulnerabilidade-critica + PRD
 
-Gerando Arquivo Incidentes.csv...
- - Arquivo Incidentes.csv gerado com sucesso no caminho: Issues\results\Incidentes.csv.
+Gerando arquivo Incidentes.csv...
+Arquivo Incidentes.csv gerado em: result\2025-11\prd\Incidentes.csv
+```
+
+### Saída via Menu Interativo
+
+Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o processo é facilitado:
+
+1. O script solicita apenas o mês de referência em `MM/AAAA`
+2. Deriva internamente o primeiro e o último dia do mês informado
+3. Usa `GITHUB_RBB_TOKEN` do `config.json` para consultar a API do GitHub no repositório `RBBNet/incidentes`
+4. Grava a saída final em `result\AAAA-MM\prd\Incidentes.csv`
+
+Exemplo de saída esperada:
+
+```text
+Gerando arquivo Incidentes.csv...
+Arquivo Incidentes.csv gerado em: result\2025-11\prd\Incidentes.csv
 ```

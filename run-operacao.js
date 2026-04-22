@@ -312,6 +312,10 @@ function getMonthDateRange(periodString) {
     };
 }
 
+function formatDateForPrompt(date) {
+    return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+}
+
 function getDefaultSemesterPeriodRange() {
     const now = new Date();
     const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -687,6 +691,9 @@ function getMenuHelpText(option) {
             'Valores default:',
             '- Mes de referencia: mes anterior ao atual.',
             '- Usuario SSH: valor de USERNAME ou USER do sistema.',
+            '- Pasta default de saida em Lab: result\\dump\\lab\\AAAA-MM.',
+            '- Pasta default de saida em Prd: result\\dump\\prd\\AAAA-MM.',
+            '- Nome default do arquivo gerado: blocksAAAA-MM.csv.',
             '',
             'Origem dos dados de entrada:',
             '- Os endpoints de Lab e Prd vem de config.json, no objeto SSH.',
@@ -709,6 +716,11 @@ function getMenuHelpText(option) {
             '',
             'Valores default:',
             '- Mes de referencia: mes anterior ao atual.',
+            '- Pasta default de origem em Lab: result\\dump\\lab\\AAAA-MM.',
+            '- Pasta default de origem em Prd: result\\dump\\prd\\AAAA-MM.',
+            '- Pasta default de destino em Lab: DUMP_RBB_LAB_BASE_DIR\\AAAA-MM.',
+            '- Pasta default de destino em Prd: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM.',
+            '- Nome default dos arquivos publicados: tipoAAAA-MM.csv, como blocksAAAA-MM.csv.',
             '',
             'Origem dos dados de entrada:',
             '- O sistema procura localmente por result\\dump\\prd\\AAAA-MM e result\\dump\\lab\\AAAA-MM.',
@@ -723,29 +735,35 @@ function getMenuHelpText(option) {
             '- Avisos no terminal indicando se foi copiado lab, prd, ambos ou nenhum.'
         ],
         '3': [
-            'Opcao 3 - Metricas de Producao de Blocos',
+            'Opcao 3 - Proposicao de Blocos por Participe',
             '',
             'Objetivo:',
             'Calcula metricas operacionais de producao de blocos a partir de um provider acessado por tunel SSH.',
             '',
             'Entradas solicitadas:',
-            '- Data inicial no formato DD/MM/AAAA.',
-            '- Data final no formato DD/MM/AAAA.',
+            '- Mes de referencia no formato MM/AAAA.',
             '- Ambiente: Lab ou Prd.',
             '- Usuario SSH.',
             '',
             'Valores default:',
-            '- Data inicial: primeiro dia do mes anterior.',
-            '- Data final: ultimo dia do mes anterior.',
+            '- Mes de referencia: mes anterior ao atual.',
             '- Usuario SSH: valor de USERNAME ou USER do sistema.',
+            '- Pasta default para os metadados nodes.json: result.',
+            '- Arquivos de metadados usados: nodes_lab.json e nodes_piloto.json.',
+            '- Pasta default de saida em Lab: result\\AAAA-MM\\lab.',
+            '- Pasta default de saida em Prd: result\\AAAA-MM\\prd.',
+            '- Nome default do arquivo gerado em Lab: Blocos_lab.csv.',
+            '- Nome default do arquivo gerado em Prd: Blocos.csv.',
             '',
             'Origem dos dados de entrada:',
             '- Configuracoes Lab e Prd sao lidas de config.json, no objeto SSH.',
             '- O provider usado pelo processamento e http://localhost:8545, exposto pelo tunel SSH.',
-            '- Os arquivos nodes_lab.json e nodes_piloto.json sao baixados do repositorio GitHub RBBNet/participantes para a pasta result, caso nao existam localmente ou o usuario escolha sobrescrever.',
+            '- Os arquivos nodes_lab.json e nodes_piloto.json sao resolvidos na pasta result antes da abertura do tunel SSH; se nao existirem localmente, ou se o usuario optar por sobrescrever, eles sao baixados do repositorio GitHub RBBNet/participantes.',
+            '- O mes informado e convertido internamente no intervalo completo entre o primeiro e o ultimo dia do mes.',
             '',
             'Saidas geradas:',
-            '- Arquivos CSV de metricas gravados na pasta result pelo script Blocks\\block-metrics.js.',
+            '- Em Lab, o script gera result\\AAAA-MM\\lab\\Blocos_lab.csv.',
+            '- Em Prd, o script gera result\\AAAA-MM\\prd\\Blocos.csv.',
             '- Logs do processamento exibidos no terminal durante a execucao.'
         ],
         '4': [
@@ -762,36 +780,46 @@ function getMenuHelpText(option) {
             'Valores default:',
             '- Mes: mes anterior ao atual.',
             '- Ano: ano correspondente ao mes anterior.',
-            '- Caminho do arquivo: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM\\blocksAAAA-MM.csv, montado a partir do mes e ano informados.',
+            '- Pasta default de origem do CSV de blocos: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM.',
+            '- Nome default do arquivo de entrada: blocksAAAA-MM.csv.',
+            '- Caminho default completo de entrada: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM\\blocksAAAA-MM.csv, montado a partir do mes e ano informados.',
+            '- Pasta default do arquivo temporario: result\\AAAA-MM\\prd\\temp.',
+            '- Nome default do arquivo temporario: blocksAAAA-MM.csv.',
+            '- Pasta default da saida final: result\\AAAA-MM\\prd.',
+            '- Nome default do arquivo de saida final: Blocos-estat.txt.',
             '',
             'Origem dos dados de entrada:',
             '- O arquivo de origem e um CSV de blocos localizado na rede corporativa, no caminho informado pelo usuario.',
-            '- Esse arquivo e copiado para a pasta local Blocks antes do processamento.',
+            '- O usuario pode alterar o caminho de entrada manualmente, mas o default da execucao e conhecido a partir de DUMP_RBB_PRD_BASE_DIR, do mes e do ano informados.',
+            '- Esse arquivo e copiado para result\\AAAA-MM\\prd\\temp antes do processamento.',
             '',
             'Saidas geradas:',
-            '- Arquivo temporario local em Blocks\\blocksAAAA-MM.csv.',
-            '- Arquivo result\\Blocos-estat.txt com as estatisticas geradas por Blocks\\block-analytics.js.'
+            '- Arquivo temporario local em result\\AAAA-MM\\prd\\temp\\blocksAAAA-MM.csv.',
+            '- Arquivo result\\AAAA-MM\\prd\\Blocos-estat.txt com as estatisticas geradas por Blocks\\block-analytics.js.'
         ],
         '5': [
             'Opcao 5 - Issues em Producao',
             '',
             'Objetivo:',
-            'Executa a coleta e consolidacao de issues de producao para o periodo informado.',
+            'Consulta a API do GitHub para coletar e consolidar issues de producao do repositorio RBBNet/incidentes.',
             '',
             'Entradas solicitadas:',
-            '- Data inicial no formato DD/MM/AAAA.',
-            '- Data final no formato DD/MM/AAAA.',
+            '- Mes de referencia no formato MM/AAAA.',
             '',
             'Valores default:',
-            '- Data inicial: primeiro dia do mes anterior.',
-            '- Data final: ultimo dia do mes anterior.',
+            '- Mes de referencia: mes anterior ao atual.',
+            '- Pasta default de saida: result\\AAAA-MM\\prd.',
+            '- Nome default do arquivo de saida: Incidentes.csv.',
+            '- Caminho default completo de saida: result\\AAAA-MM\\prd\\Incidentes.csv.',
             '',
             'Origem dos dados de entrada:',
-            '- O script Issues\\issue-metrics.js recebe apenas o intervalo de datas pelo menu.',
-            '- As demais fontes consultadas dependem da implementacao interna desse script.',
+            '- O script Issues\\issue-metrics.js usa o token GITHUB_RBB_TOKEN do config.json para consultar a API do GitHub.',
+            '- As issues sao buscadas no repositorio RBBNet/incidentes com filtro de producao (PRD).',
+            '- O mes informado e convertido internamente no intervalo completo entre o primeiro e o ultimo dia do mes.',
+            '- Se configurado, PROXY_URL em config.json e usado nas chamadas HTTP ao GitHub.',
             '',
             'Saidas geradas:',
-            '- Arquivos de saida produzidos por Issues\\issue-metrics.js, tipicamente na pasta result.',
+            '- Arquivo result\\AAAA-MM\\prd\\Incidentes.csv com os incidentes coletados no GitHub para o mes selecionado.',
             '- Logs do processamento mostrados no terminal.'
         ],
         '6': [
@@ -807,6 +835,10 @@ function getMenuHelpText(option) {
             'Valores default:',
             '- Periodo inicial: inicio do semestre corrente de acompanhamento. Se a data atual estiver no primeiro semestre, usa 07 do ano anterior; se estiver no segundo semestre, usa 01 do ano atual.',
             '- Periodo final: mes anterior ao atual.',
+            '- Pasta default de leitura dos arquivos mensais: INDICADORES_BASE_DIR\\AAAA-MM.',
+            '- Nomes default dos arquivos mensais lidos: Blocos.csv e Blocos-estat.txt.',
+            '- Pasta default de saida: result.',
+            '- Nome default do arquivo de saida: Indicadores-operacao.html.',
             '',
             'Origem dos dados de entrada:',
             '- O script percorre mes a mes do periodo inicial ao final e tenta ler, para cada mes, os arquivos Blocos.csv e Blocos-estat.txt.',
@@ -840,7 +872,7 @@ async function showHelpMenu() {
     console.log('Escolha a opcao que deseja detalhar:');
     console.log('1. Dump RBB (ethereum-etl) para pasta local');
     console.log('2. Publica dump RBB para pasta da rede');
-    console.log('3. Metricas de Producao de Blocos');
+    console.log('3. Proposicao de Blocos por Participe');
     console.log('4. Estatisticas do Tempo de Producao de Blocos');
     console.log('5. Issues em Producao');
     console.log('6. Gerar HTML Operacional');
@@ -867,7 +899,7 @@ async function showMenu() {
     console.log('==========================================');
     console.log('1. Dump RBB (ethereum-etl) para pasta local');
     console.log('2. Publica dump RBB para pasta da rede');
-    console.log('3. Metricas de Producao de Blocos');
+    console.log('3. Proposicao de Blocos por Participe');
     console.log('4. Estatisticas do Tempo de Producao de Blocos');
     console.log('5. Issues em Producao');
     console.log('6. Gerar HTML Operacional');
@@ -919,14 +951,34 @@ async function showMenu() {
 }
 
 async function blockMetrics() {
-    console.log('\n--- Metricas de Producao de Blocos ---\n');
-    const defaults = getDefaultMonthDateRange();
-    const startDate = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaults.startDate);
-    const endDate = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaults.endDate);
+    console.log('\n--- Proposicao de Blocos por Participe ---\n');
+    const defaultPeriod = getDefaultMonthPeriod();
+    const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
+
+    let monthRange;
+    try {
+        monthRange = getMonthDateRange(referencePeriod);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    const startDate = formatDateForPrompt(monthRange.startDate);
+    const endDate = formatDateForPrompt(monthRange.endDate);
 
     let environment;
     try {
         environment = await selectOperationalEnvironment();
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    const resultDir = path.join(__dirname, 'result');
+    try {
+        await ensureNodesFiles(resultDir);
     } catch (error) {
         console.log(`ERRO: ${error.message}`);
         await pause();
@@ -941,18 +993,17 @@ async function blockMetrics() {
         console.log('Aguardando estabilizacao do tunel...');
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        const resultDir = path.join(__dirname, 'result');
-        await ensureNodesFiles(resultDir);
-
         const provider = 'http://localhost:8545';
         console.log(`\nUsando provider: ${provider}`);
-        console.log('Executando metricas de producao de blocos...\n');
+        console.log('Executando proposicao de blocos por participe...\n');
 
         await runNode(path.join(__dirname, 'Blocks', 'block-metrics.js'), [
             startDate,
             endDate,
             provider,
-            resultDir
+            resultDir,
+            monthRange.folderName,
+            environment.envSlug
         ]);
     } catch (error) {
         console.error(`\nERRO: ${error.message}`);
@@ -976,10 +1027,11 @@ async function blockAnalytics() {
 
     const refMonth = await questionWithDefault('Digite o mes de referencia (MM)', defaultMonth);
     const refYear = await questionWithDefault('Digite o ano de referencia (AAAA)', defaultYear);
+    const folderName = `${refYear}-${refMonth}`;
     const defaultPath = path.join(
         config.DUMP_RBB_PRD_BASE_DIR,
-        `${refYear}-${refMonth}`,
-        `blocks${refYear}-${refMonth}.csv`
+        folderName,
+        `blocks${folderName}.csv`
     );
     const blocksPath = await questionWithDefault('Arquivo de blocos', defaultPath);
 
@@ -991,14 +1043,17 @@ async function blockAnalytics() {
     }
 
     console.log('Arquivo encontrado. Copiando para pasta local...');
-    const localPath = path.join(__dirname, 'Blocks', `blocks${refYear}-${refMonth}.csv`);
+    const outputDir = path.join(__dirname, 'result', folderName, 'prd');
+    const tempDir = path.join(outputDir, 'temp');
+    const localPath = path.join(tempDir, `blocks${folderName}.csv`);
 
     try {
+        ensureDir(tempDir);
         await copyFile(blocksPath, localPath);
         console.log('Copia concluida. Processando estatisticas...');
 
-        ensureDir(path.join(__dirname, 'result'));
-        const outputPath = path.join(__dirname, 'result', 'Blocos-estat.txt');
+        ensureDir(outputDir);
+        const outputPath = path.join(outputDir, 'Blocos-estat.txt');
         const outputStream = fs.createWriteStream(outputPath);
         const child = spawn('node', [path.join(__dirname, 'Blocks', 'block-analytics.js'), localPath], { shell: true });
         let stderrOutput = '';
@@ -1020,7 +1075,7 @@ async function blockAnalytics() {
         });
 
         console.log('\nProcessamento concluido!');
-        console.log('Resultado salvo em: result\\Blocos-estat.txt');
+        console.log(`Resultado salvo em: ${outputPath}`);
         console.log(`Arquivo temporario: ${localPath}`);
         console.log();
     } catch (error) {
@@ -1228,14 +1283,25 @@ async function publishRbbDumpToNetworkFolder() {
 async function issueMetrics() {
     console.log('\n--- Issues em Producao ---\n');
 
-    const defaults = getDefaultMonthDateRange();
-    const startDate = await questionWithDefault('Digite a data inicial (DD/MM/AAAA)', defaults.startDate);
-    const endDate = await questionWithDefault('Digite a data final (DD/MM/AAAA)', defaults.endDate);
+    const defaultPeriod = getDefaultMonthPeriod();
+    const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
+
+    let monthRange;
+    try {
+        monthRange = getMonthDateRange(referencePeriod);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    const startDate = formatDateForPrompt(monthRange.startDate);
+    const endDate = formatDateForPrompt(monthRange.endDate);
 
     rl.close();
 
     try {
-        await runNode(path.join(__dirname, 'Issues', 'issue-metrics.js'), [startDate, endDate]);
+        await runNode(path.join(__dirname, 'Issues', 'issue-metrics.js'), [startDate, endDate, monthRange.folderName]);
     } finally {
         rl = createReadlineInterface();
     }

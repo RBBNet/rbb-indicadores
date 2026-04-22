@@ -60,15 +60,16 @@ function validate_date(date){
     return !(date > today);
 }
 
-function write_csv(header, data) {
+function write_csv(header, data, fileName = 'Blocos.csv', outputSubdirectory = '') {
     // Cria o arquivo csv e a pasta de resultados 
     const resultsFolder = path.join('.', 'result');
-    if (!fs.existsSync(resultsFolder)) {
-        fs.mkdirSync(resultsFolder, { recursive: true });
+    const outputFolder = outputSubdirectory ? path.join(resultsFolder, outputSubdirectory) : resultsFolder;
+
+    if (!fs.existsSync(outputFolder)) {
+        fs.mkdirSync(outputFolder, { recursive: true });
     }
-    
-    const fileName = 'Blocos.csv';
-    const filePath = path.join(resultsFolder, fileName);
+
+    const filePath = path.join(outputFolder, fileName);
 
     console.log(`\nGerando Arquivo ${fileName}...`);
 

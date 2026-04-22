@@ -1,6 +1,8 @@
-# Métricas de Produção de Blocos
+# Proposição de Blocos por Partícipe
 
 Essa ferramenta realiza consultas a um nó da RBB para extração de métricas relativas à produção de blocos em um determinado período de tempo. Um relatório é gerado e salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
+
+Quando executada pelo menu operacional, a ferramenta pede um mes de referencia em `MM/AAAA`, converte esse valor internamente para o primeiro e o ultimo dia do mes e grava a saida em `result/AAAA-MM/lab/Blocos_lab.csv` para o ambiente Lab ou em `result/AAAA-MM/prd/Blocos.csv` para o ambiente Prd.
 
 ## Requisitos
 
@@ -17,7 +19,7 @@ Para utilizar essa ferramenta é necessário:
 Os parâmetros que a ferramenta utiliza são passados por linha de comando nos seguintes formatos e ordem:
 
 ```bash
-node Blocks\block-metrics.js <data inicial> <data final> <provider> <endereço_do_nodes.json>
+node Blocks\block-metrics.js <data inicial> <data final> <provider> <endereço_do_nodes.json> [pasta-mensal] [ambiente]
 ```
 
 Onde:
@@ -30,11 +32,13 @@ Onde:
 - `<provider>` é o endereço http para o qual se pode enviar chamadas JSON-RPC aos nós BESU. Normalmente `http://localhost:8545`
 
 - `<endereço_do_nodes.json>` refere-se ao **path** até os arquivos contendo os metadados dos nós. Os arquivos json devem ter o nome no formato `nodes_<rede>.json`.
+- `[pasta-mensal]` é opcional e define a subpasta sob `result`, normalmente no formato `AAAA-MM`.
+- `[ambiente]` é opcional e controla a subpasta final e o nome do arquivo de saída. Use `lab` para gerar `result/AAAA-MM/lab/Blocos_lab.csv`; omitindo a pasta mensal ou o ambiente, a saida continua compativel com `result/Blocos.csv`.
 
 Dessa forma, uma possível execução dessa ferramenta seria:
 
 ```bash
-node Blocks\block-metrics.js 27/11/2024 11/12/2024 http://localhost:8545 ../nodesFolder
+node Blocks\block-metrics.js 01/03/2026 31/03/2026 http://localhost:8545 ../nodesFolder 2026-03 lab
 ```
 
 A qual retornaria, por exemplo:
@@ -57,7 +61,7 @@ Rendimento:        xx%
 │ 1       │'Unknown'    │ xxxx              │
 │ ...     │ '....'      │ ....              │
 └─────────┴─────────────┴───────────────────┘
-Arquivo CSV gerado com sucesso
+Arquivo Blocos_lab.csv gerado com sucesso no caminho: result\2026-03\lab\Blocos_lab.csv
 ```
 
 ## Métricas de Análise de Blocos
@@ -101,9 +105,9 @@ Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o 
 1. O script solicita o mês (MM) e ano (AAAA) de referência
 2. Sugere automaticamente o caminho padrão na rede a partir de `DUMP_RBB_PRD_BASE_DIR`: `DUMP_RBB_PRD_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv`
 3. Permite confirmar ou informar um caminho alternativo
-4. Copia o arquivo para a pasta local `Blocks\` (devido ao tamanho do arquivo)
+4. Copia o arquivo para a pasta temporária local `result\AAAA-MM\prd\temp\blocksAAAA-MM.csv`
 5. Processa as estatísticas
-6. Salva o resultado em `result/Blocos-estat.txt`
+6. Salva o resultado em `result\AAAA-MM\prd\Blocos-estat.txt`
 
 **Exemplo de interação:**
 ```
@@ -118,6 +122,6 @@ Arquivo encontrado. Copiando para pasta local...
 Copia concluida. Processando estatisticas...
 
 Processamento concluido!
-Resultado salvo em: result\Blocos-estat.txt
-Arquivo temporario: Blocks\blocks2025-11.csv
+Resultado salvo em: result\2025-11\prd\Blocos-estat.txt
+Arquivo temporario: result\2025-11\prd\temp\blocks2025-11.csv
 ```

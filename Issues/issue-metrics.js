@@ -8,8 +8,8 @@ let labels = ['incidente','incidente-critico', 'vulnerabilidade','vulnerabilidad
 
 async function listIssues() {
     try {
-        if (process.argv.length !== 4) {
-            console.error('Parâmetros incorretos.\nUse: node issue-metrics.js <data-inicial> <data-final>\nFormato: DD/MM/AAAA');
+        if (process.argv.length < 4 || process.argv.length > 5) {
+            console.error('Parâmetros incorretos.\nUse: node issue-metrics.js <data-inicial> <data-final> [pasta-mensal]\nFormato: DD/MM/AAAA');
             exit(1);
         }
 
@@ -28,7 +28,10 @@ async function listIssues() {
         // Intervalo aberto no final
         date_last = addDays(date_last, 1);
 
-        const resultsFolder = path.join('.', 'result');
+        const monthFolder = process.argv[4] || '';
+        const resultsFolder = monthFolder
+            ? path.join('.', 'result', monthFolder, 'prd')
+            : path.join('.', 'result');
         if (!fs.existsSync(resultsFolder)) fs.mkdirSync(resultsFolder, { recursive: true });
 
         let fileData = 'number;title;labels;assignees;daysOpen;state';

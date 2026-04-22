@@ -3,6 +3,7 @@ import { ethers } from 'ethers';
 import helpers from './helpers.js';
 import nodeFunctions from './node-functions.js';
 import fs from 'fs';
+import path from 'path';
 import { addDays } from 'date-fns';
 
 async function blockProductionMetrics(url, first_block_number, last_block_number, nodesByIdMap) {
@@ -28,15 +29,22 @@ function mapNodes(nodesByIdMap, nodes_json_folder_path, rede) {
 
 async function getMetrics(){
     //obtendo parametros
-    if(process.argv.length != 6){
-        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node block-metrics.js <data-inicial> <data-final> <url-json-rpc> <caminho-nodes-json>\n');
+    if(process.argv.length < 6 || process.argv.length > 8){
+        console.error('Parâmetros incorretos.\nInsira conforme o exemplo: node block-metrics.js <data-inicial> <data-final> <url-json-rpc> <caminho-nodes-json> [pasta-mensal] [ambiente]\n');
         return;
     }
     
     let date_first = process.argv[2];
     let date_last = process.argv[3];
     const json_rpc_address = process.argv[4];
-    const nodes_json_folder_path = process.argv[5]; 
+    const nodes_json_folder_path = process.argv[5];
+    const optionalFolderOrEnvironment = process.argv[6] || '';
+    const hasMonthlyFolder = /^\d{4}-\d{2}$/.test(optionalFolderOrEnvironment);
+    const monthFolderName = hasMonthlyFolder ? optionalFolderOrEnvironment : null;
+    const environmentSlug = (hasMonthlyFolder ? process.argv[7] : process.argv[6] || 'prd').toLowerCase();
+    const environmentFolder = environmentSlug === 'lab' ? 'lab' : 'prd';
+    const outputFileName = environmentSlug === 'lab' ? 'Blocos_lab.csv' : 'Blocos.csv';
+    const outputSubdirectory = monthFolderName ? path.join(monthFolderName, environmentFolder) : '';
     
     let provider;
     try{
@@ -165,7 +173,7 @@ Tempo medio/bloco (s);${(averageBlockProductionTime.toFixed(3)).replace('.', ','
 Organizacao; Blocos Produzidos\n`;
         console.table(filteredResults);
         
-    helpers.write_csv(file_header,filteredResults);
+    helpers.write_csv(file_header, filteredResults, outputFileName, outputSubdirectory);
 }
 
 getMetrics();
