@@ -912,6 +912,7 @@ function getMenuHelpText(option) {
             'Entradas solicitadas:',
             '- Periodo inicial no formato MM/AAAA.',
             '- Periodo final no formato MM/AAAA.',
+            '- Confirmacao para sobrescrever o HTML final, quando o arquivo de mesmo nome ja existir no destino.',
             '',
             'Valores default:',
             '- Periodo inicial: inicio do semestre corrente de acompanhamento. Se a data atual estiver no primeiro semestre, usa 07 do ano anterior; se estiver no segundo semestre, usa 01 do ano atual.',
@@ -1220,6 +1221,17 @@ async function operationalHtmlReport() {
             localOutputPath
         ]);
         ensureNetworkTargetDir(indicatorsBaseDir, finalOutputDir);
+
+        if (fs.existsSync(finalOutputPath)) {
+            const overwrite = await questionWithDefault(`Arquivo ${finalOutputPath} ja existe. Deseja sobrescrever? (s/n)`, 'n');
+            if (overwrite.trim().toLowerCase() !== 's') {
+                console.log(`\nHTML operacional gerado localmente em: ${localOutputPath}`);
+                console.log('Copia para a pasta final cancelada pelo usuario.');
+                await pause();
+                return;
+            }
+        }
+
         await copyFile(localOutputPath, finalOutputPath);
         console.log(`\nHTML operacional gerado em: ${localOutputPath}`);
         console.log(`HTML operacional copiado para: ${finalOutputPath}`);
