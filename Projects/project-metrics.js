@@ -5,7 +5,7 @@ import path from 'path';
 import papa from 'papaparse';
 import readline from 'readline';
 
-const RESULT_DIR = 'result';
+const RESULT_ROOT_DIR = 'result';
 let RESULT_FILE = 'Iniciativas_updated.csv'; // Será atualizado com o período de referência
 const HEADER_ROW = 0;
 const FIRST_DATA_ROW = HEADER_ROW + 1;
@@ -230,8 +230,8 @@ main();
 async function main() {
     const totalStages = 5;
 
-    if(process.argv.length != 4){
-        console.error('ERRO: Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas>\n');
+    if(process.argv.length < 4 || process.argv.length > 5){
+        console.error('ERRO: Parâmetros incorretos.\nInsira conforme o exemplo: node project-metrics.js <mes-referencia>/<ano-referencia> <caminho-csv-iniciativas> [pasta-mensal]\n');
         return;
     }
     const refPeriod = process.argv[2];
@@ -244,6 +244,8 @@ async function main() {
 
     const refMonth = parseInt(refPeriodParts[0]);
     const refYear = parseInt(refPeriodParts[1]);
+    const monthFolderName = process.argv[4] || `${refYear}-${String(refMonth).padStart(2, '0')}`;
+    const resultDir = path.join(RESULT_ROOT_DIR, monthFolderName);
     
     // Atualizar nome do arquivo de saída com o período de referência
     RESULT_FILE = `Iniciativas_${refYear}-${String(refMonth).padStart(2, '0')}.csv`;
@@ -394,7 +396,7 @@ async function main() {
 
     logStage(5, totalStages, 'Salvando arquivo consolidado de iniciativas');
     console.log('Gerando arquivos atualizado de iniciativas...');
-    await writeCsv(RESULT_DIR, RESULT_FILE, initiatives);
+    await writeCsv(resultDir, RESULT_FILE, initiatives);
     console.log();
     
     rl.close();
@@ -451,7 +453,8 @@ async function writeTimelineCSV(activeIssues) {
             fileData.push([timelineEvent.issue_id, timelineEvent.id, timelineEvent.event, timelineEvent.event_created_at.toISOString(), timelineEvent.user, timelineEvent.body]);
         });
     });
-    await writeCsv(RESULT_DIR, 'Comentarios.csv', fileData);
+    const monthFolderName = process.argv[4] || `${String(process.argv[2]).split('/')[1]}-${String(process.argv[2]).split('/')[0]}`;
+    await writeCsv(path.join(RESULT_ROOT_DIR, monthFolderName), 'Comentarios.csv', fileData);
 }
 
 async function writeIssueCSV(activeIssues) {
@@ -462,7 +465,8 @@ async function writeIssueCSV(activeIssues) {
         const issue = activeIssue.issue;
         fileData.push([issue.issue_id, issue.title]);
     });
-    await writeCsv(RESULT_DIR, 'Issues.csv', fileData);
+    const monthFolderName = process.argv[4] || `${String(process.argv[2]).split('/')[1]}-${String(process.argv[2]).split('/')[0]}`;
+    await writeCsv(path.join(RESULT_ROOT_DIR, monthFolderName), 'Issues.csv', fileData);
 }
 
 async function writeCsv(fileDir, fileName, fileData) {

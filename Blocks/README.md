@@ -70,6 +70,45 @@ Arquivo Blocos_lab.csv gerado com sucesso no caminho: result\2026-03\lab\Blocos_
 
 A ferramenta `block-analytics.js` realiza a análise de um arquivo CSV contendo dados de blocos, calculando estatísticas como tempo máximo, mínimo, médio e desvio padrão do tempo de produção dos blocos.
 
+## Votos de Consenso por extraData
+
+A ferramenta `block-consensus-votes.js` examina o arquivo mensal de blocos gerado pelo `ethereum-etl`, decodifica o campo `extra_data` de cada bloco e registra apenas os votos explicitamente observados no cabeçalho dos blocos para inclusão ou exclusão do consenso.
+
+### Utilização
+
+Os parâmetros que a ferramenta utiliza são passados por linha de comando no seguinte formato:
+
+```bash
+node Blocks\block-consensus-votes.js <caminho-do-blocks.csv> <pasta-mensal-result> <ambiente> <arquivo-saida.csv>
+```
+
+Onde:
+
+- `<caminho-do-blocks.csv>` aponta para `blocksAAAA-MM.csv` do ambiente analisado.
+- `<pasta-mensal-result>` normalmente aponta para `result\AAAA-MM`, onde o script procura `nodes_lab.json` e `nodes_piloto.json` para traduzir endereços em instituições.
+- `<ambiente>` deve ser `lab` ou `prd`.
+- `<arquivo-saida.csv>` define o arquivo CSV final, por exemplo `result\2026-03\Votos-consenso-prd.csv`.
+
+Exemplo:
+
+```bash
+node Blocks\block-consensus-votes.js result\dump\prd\2026-03\blocks2026-03.csv result\2026-03 prd result\2026-03\Votos-consenso-prd.csv
+```
+
+### Saída via Menu Interativo
+
+Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o processo fica assim:
+
+1. O script solicita o mês de referência em `MM/AAAA`
+2. Solicita o ambiente Lab ou Prd
+3. Procura primeiro `blocksAAAA-MM.csv` em `result\dump\{lab|prd}\AAAA-MM`
+4. Se não encontrar localmente, faz fallback para `DUMP_RBB_LAB_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv` ou `DUMP_RBB_PRD_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv`
+5. Em ambos os casos, mostra a origem escolhida e pede confirmação
+6. Quando a origem é a rede, copia o arquivo para `result\dump\{lab|prd}\AAAA-MM\blocksAAAA-MM.csv`
+7. Garante a presença de `nodes_lab.json` e `nodes_piloto.json` em `result\AAAA-MM`, baixando-os quando necessário
+8. Decodifica o `extra_data` dos blocos para procurar votos observados
+9. Gera `result\AAAA-MM\Votos-consenso-lab.csv` ou `result\AAAA-MM\Votos-consenso-prd.csv`, com datas em horário de Brasília
+
 ### Utilização
 
 Os parâmetros que a ferramenta utiliza são passados por linha de comando no seguinte formato:
@@ -105,25 +144,28 @@ Quantil 99%: xxxx s
 Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o processo é facilitado:
 
 1. O script solicita o mês (MM) e ano (AAAA) de referência
-2. Sugere automaticamente o caminho padrão na rede a partir de `DUMP_RBB_PRD_BASE_DIR`: `DUMP_RBB_PRD_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv`
-3. Permite confirmar ou informar um caminho alternativo
-4. Copia o arquivo para a pasta temporária local `result\AAAA-MM\prd\temp\blocksAAAA-MM.csv`
-5. Processa as estatísticas
-6. Salva o resultado em `result\AAAA-MM\prd\Blocos-estat.txt`
+2. Solicita o ambiente Lab ou Prd
+3. Procura primeiro `blocksAAAA-MM.csv` em `result\dump\{lab|prd}\AAAA-MM`
+4. Se não encontrar localmente, faz fallback para `DUMP_RBB_LAB_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv` ou `DUMP_RBB_PRD_BASE_DIR\AAAA-MM\blocksAAAA-MM.csv`
+5. Em ambos os casos, mostra a origem escolhida e pede confirmação
+6. Quando a origem é a rede, copia o arquivo para `result\dump\{lab|prd}\AAAA-MM\blocksAAAA-MM.csv`
+7. Processa as estatísticas
+8. Salva o resultado em `result\AAAA-MM\{lab|prd}\Blocos-estat.txt`
 
 **Exemplo de interação:**
 ```
 Digite o mes de referencia (MM): 11
 Digite o ano de referencia (AAAA): 2025
+Escolha o ambiente (1-2): 2
 
-Caminho padrao sugerido:
-DUMP_RBB_PRD_BASE_DIR\2025-11\blocks2025-11.csv
-
-Deseja usar este caminho? (S/N): S
-Arquivo encontrado. Copiando para pasta local...
-Copia concluida. Processando estatisticas...
+Ambiente selecionado: Prd
+Origem escolhida: pasta local de dump
+Arquivo de blocos: result\dump\prd\2025-11\blocks2025-11.csv
+Confirmar uso desta origem? (s/n): s
+Usando arquivo local ja existente no dump.
+Processando estatisticas...
 
 Processamento concluido!
 Resultado salvo em: result\2025-11\prd\Blocos-estat.txt
-Arquivo temporario: result\2025-11\prd\temp\blocks2025-11.csv
+Arquivo de blocos utilizado: result\dump\prd\2025-11\blocks2025-11.csv
 ```

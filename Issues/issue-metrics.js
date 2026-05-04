@@ -4,7 +4,7 @@ import path from 'path';
 import { exit } from 'process';
 import { addDays } from 'date-fns';
 
-let labels = ['incidente','incidente-critico', 'vulnerabilidade','vulnerabilidade-critica'];
+const labels = ['incidente', 'incidente-critico', 'vulnerabilidade', 'vulnerabilidade-critica'];
 
 async function listIssues() {
     try {
@@ -30,19 +30,18 @@ async function listIssues() {
 
         const monthFolder = process.argv[4] || '';
         const resultsFolder = monthFolder
-            ? path.join('.', 'result', monthFolder, 'prd')
+            ? path.join('.', 'result', monthFolder)
             : path.join('.', 'result');
         if (!fs.existsSync(resultsFolder)) fs.mkdirSync(resultsFolder, { recursive: true });
 
         let fileData = 'number;title;labels;assignees;daysOpen;state';
-        let allOpenIssues = [];
+        const matchedIssues = new Map();
 
         for (const label of labels) {
             console.log('\n' + '-'.repeat(50));
             console.log(`ISSUES PARA ${label} + PRD`);
 
             let closedIssues = [];
-            let openIssues = [];
 
             try {
                 const paramsClosed = {
@@ -50,7 +49,7 @@ async function listIssues() {
                     repo: 'incidentes',
                     state: 'closed',
                     labels: `${label},PRD`,
-                    since: date_first.toISOString(),
+                    per_page: 100,
                     headers: { 'X-GitHub-Api-Version': '2022-11-28' }
                 };
 
@@ -60,24 +59,15 @@ async function listIssues() {
                     closedIssues = [];
                 } else {
                     closedIssues = closedIssues.filter(issue => {
-                        const updateDate = new Date(issue.updated_at);
-                        return updateDate.valueOf() < date_last.valueOf();
+                        if (!issue.closed_at) {
+                            return false;
+                        }
+
+                        const closedDate = new Date(issue.closed_at);
+                        return closedDate.valueOf() >= date_first.valueOf()
+                            && closedDate.valueOf() < date_last.valueOf();
                     });
                 }
-
-                const paramsOpen = {
-                    owner: 'RBBNet',
-                    repo: 'incidentes',
-                    state: 'open',
-                    labels: `${label},PRD`,
-                    headers: { 'X-GitHub-Api-Version': '2022-11-28' }
-                };
-                openIssues = await functions.fetchIssues(paramsOpen);
-                if (!Array.isArray(openIssues)) {
-                    console.warn(`Retorno inesperado (open) para label ${label}`);
-                    openIssues = [];
-                }
-                allOpenIssues = allOpenIssues.concat(openIssues);
             } catch (apiErr) {
                 console.error(`Falha ao buscar issues para label ${label}: ${apiErr.status || ''} ${apiErr.message}`);
                 continue; // passa para próximo label
@@ -85,7 +75,7 @@ async function listIssues() {
 
             if (closedIssues.length > 0) {
                 closedIssues.forEach(issue => {
-                    fileData += `\n${issue.number};${sanitize(issue.title)};${serializeLabels(issue.labels)};${serializeAssignees(issue.assignees)};${issue.daysOpen ?? ''};${issue.state}`;
+                    matchedIssues.set(issue.number, issue);
                 });
                 console.table(closedIssues, ['number','title','state']);
             } else {
@@ -93,15 +83,13 @@ async function listIssues() {
             }
         }
 
+        const finalIssues = Array.from(matchedIssues.values()).sort((left, right) => left.number - right.number);
+        finalIssues.forEach(issue => {
+            fileData += `\n${issue.number};${sanitize(issue.title)};${serializeLabels(issue.labels)};${serializeAssignees(issue.assignees)};${issue.daysOpen ?? ''};${issue.state}`;
+        });
+
         console.log('\n' + '-'.repeat(50));
-        console.log('ISSUES EM ABERTO');
-        if (allOpenIssues.length > 0) {
-            allOpenIssues.forEach(issue => {
-                fileData += `\n${issue.number};${sanitize(issue.title)};${serializeLabels(issue.labels)};${serializeAssignees(issue.assignees)};${issue.daysOpen ?? ''};${issue.state}`;
-            });
-            console.table(allOpenIssues, ['number','title','state']);
-        }
-        console.log(`Total de issues em aberto: ${allOpenIssues.length}`);
+        console.log(`Total de issues fechadas no intervalo: ${finalIssues.length}`);
 
         const fileName = 'Incidentes.csv';
         const filePath = path.join(resultsFolder, fileName);

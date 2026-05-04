@@ -53,6 +53,7 @@ async function fetchIssues(params) {
                 'labels': issue.labels.map(label => label.name),
                 'assignees': issue.assignees ? issue.assignees.map(assignees => '@'+assignees.login) : null,
                 'daysOpen': calculateDaysOpen(issue.created_at, issue.closed_at),
+                'closed_at': issue.closed_at,
                 'updated_at': issue.updated_at,
                 'state': issue.state
             };

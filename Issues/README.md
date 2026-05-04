@@ -2,7 +2,7 @@
 
 Essa ferramenta realiza consultas ao GitHub, através de sua API, para extração de dados relativos aos incidentes (issues) de produção em um determinado período de tempo. Um relatório é gerado e salvo em arquivo `.csv`, permitindo integração com ferramentas de análise de dados.
 
-A ferramenta retorna todas as issues já fechadas que foram atualizadas pela última vez no período solicitado.
+A ferramenta retorna apenas issues fechadas no período solicitado, desde que tenham a label `PRD` combinada com uma das labels operacionais suportadas: `incidente`, `incidente-critico`, `vulnerabilidade` ou `vulnerabilidade-critica`. Issues com labels adicionais podem entrar, desde que respeitem esse critério.
 
 ## Requisitos
 
@@ -41,7 +41,7 @@ Onde:
   - `<data inicial>` deve ser anterior ou igual a `<data final>`.
   - `<data final>` deve ser anterior ou igual à data corrente.
   - Ambas as datas devem ser passadas obrigatoriamente no formato **DD/MM/AAAA**.
-- `[pasta-mensal]` é opcional e define a subpasta de saída sob `result`, normalmente no formato `AAAA-MM`. Quando informada, a saída é gravada em `result/AAAA-MM/prd/Incidentes.csv`.
+- `[pasta-mensal]` é opcional e define a subpasta de saída sob `result`, normalmente no formato `AAAA-MM`. Quando informada, a saída é gravada em `result/AAAA-MM/Incidentes.csv`.
 
 A ferramenta retorna mensagens como as exemplificadas abaixo e gera um arquivo CSV, conforme indicado:
 
@@ -72,7 +72,7 @@ ISSUES FOR vulnerabilidade-critica + PRD
 No issues found for label: vulnerabilidade-critica + PRD
 
 Gerando arquivo Incidentes.csv...
-Arquivo Incidentes.csv gerado em: result\2025-11\prd\Incidentes.csv
+Arquivo Incidentes.csv gerado em: result\2025-11\Incidentes.csv
 ```
 
 ### Saída via Menu Interativo
@@ -82,11 +82,11 @@ Ao executar através do menu interativo de Operacao (`node run-operacao.js`), o 
 1. O script solicita apenas o mês de referência em `MM/AAAA`
 2. Deriva internamente o primeiro e o último dia do mês informado
 3. Usa `GITHUB_RBB_TOKEN` do `config.json` para consultar a API do GitHub no repositório `RBBNet/incidentes`
-4. Grava a saída final em `result\AAAA-MM\prd\Incidentes.csv`
+4. Grava a saída final em `result\AAAA-MM\Incidentes.csv`
 
 Exemplo de saída esperada:
 
 ```text
 Gerando arquivo Incidentes.csv...
-Arquivo Incidentes.csv gerado em: result\2025-11\prd\Incidentes.csv
+Arquivo Incidentes.csv gerado em: result\2025-11\Incidentes.csv
 ```

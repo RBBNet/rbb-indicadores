@@ -106,7 +106,7 @@ Ao ser executada, a ferramenta:
   - Somente serão consideradas as issues que tenham em seu título identificadores registrados no CSV de entrada.
 - Para cada *issue* obtida serão buscados comentários que contenham em seu corpo a *tag* `#andamento` e tenham sido registrados no período informado.
 
-Ao final da execução, a ferramenta gerará os seguintes arquivos, em formato CSV, na pasta **`result`**:
+Ao final da execução, a ferramenta gerará os seguintes arquivos, em formato CSV, na pasta **`result\AAAA-MM`**, onde `AAAA-MM` corresponde ao período de referência informado:
 - **`Issues.csv`**: Contendo as *issues* identificadas para o projeto.
 - **`Comentarios.csv`**: Contendo todos os comentários encontrados para as *issues* no período informado.
 - **`Iniciativas_AAAA-MM.csv`**: Contendo as iniciativas, conforme reportadas no arquivo de entrada (incluindo inclusões/exclusões feitas interativamente), porém com a atualização da situação na coluna correspondente ao período informado. O nome segue o formato `Iniciativas_AAAA-MM.csv`, onde AAAA-MM é o período de referência informado.

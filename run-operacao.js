@@ -367,7 +367,7 @@ function getDumpNetworkBaseDir(envName) {
     return null;
 }
 
-async function selectOperationalEnvironment() {
+async function selectRbbEnvironment() {
     console.log('\n--- Ambiente RBB ---');
     console.log('1. Lab');
     console.log('2. Prd');
@@ -377,11 +377,6 @@ async function selectOperationalEnvironment() {
     const envName = normalizedChoice === '2' ? 'PROD' : 'LAB';
     const envLabel = envName === 'PROD' ? 'Prd' : 'Lab';
     const envSlug = envName === 'PROD' ? 'prd' : 'lab';
-    const sshEnvConfig = getSshEnvironmentConfig(envName);
-
-    if (!sshEnvConfig?.remoteHost || !sshEnvConfig?.sshHost) {
-        throw new Error(`Configure SSH.${envName}.REMOTE_HOST e SSH.${envName}.SSH_HOST no config.json.`);
-    }
 
     if (normalizedChoice !== '1' && normalizedChoice !== '2') {
         console.log(`Opcao invalida. Usando ${envLabel}.`);
@@ -390,9 +385,71 @@ async function selectOperationalEnvironment() {
     return {
         envName,
         envLabel,
+        envSlug
+    };
+}
+
+async function selectOperationalEnvironment() {
+    const environment = await selectRbbEnvironment();
+    const { envName, envLabel, envSlug } = environment;
+    const sshEnvConfig = getSshEnvironmentConfig(envName);
+
+    if (!sshEnvConfig?.remoteHost || !sshEnvConfig?.sshHost) {
+        throw new Error(`Configure SSH.${envName}.REMOTE_HOST e SSH.${envName}.SSH_HOST no config.json.`);
+    }
+
+    return {
+        ...environment,
+        envName,
+        envLabel,
         envSlug,
         ...sshEnvConfig
     };
+}
+
+function resolveMonthlyDumpSource(environment, folderName, fileName) {
+    const localDir = path.join(__dirname, 'result', 'dump', environment.envSlug, folderName);
+    const localPath = path.join(localDir, fileName);
+
+    if (fs.existsSync(localPath)) {
+        return {
+            originType: 'local',
+            originLabel: 'pasta local de dump',
+            sourcePath: localPath,
+            localDir,
+            localPath,
+            fileName
+        };
+    }
+
+    const networkBaseDir = getDumpNetworkBaseDir(environment.envName);
+    if (!networkBaseDir) {
+        throw new Error(`Configure ${environment.envName === 'PROD' ? 'DUMP_RBB_PRD_BASE_DIR' : 'DUMP_RBB_LAB_BASE_DIR'} no config.json.`);
+    }
+
+    const networkPath = path.join(networkBaseDir, folderName, fileName);
+    if (fs.existsSync(networkPath)) {
+        return {
+            originType: 'network',
+            originLabel: 'pasta de rede',
+            sourcePath: networkPath,
+            localDir,
+            localPath,
+            fileName
+        };
+    }
+
+    return {
+        originType: 'missing',
+        localDir,
+        localPath,
+        networkPath,
+        fileName
+    };
+}
+
+function resolveBlockAnalyticsSource(environment, folderName) {
+    return resolveMonthlyDumpSource(environment, folderName, `blocks${folderName}.csv`);
 }
 
 function resetDir(dirPath) {
@@ -421,6 +478,71 @@ function collectLeafFiles(dirPath) {
         ...directFiles,
         ...childDirectories.flatMap(entry => collectLeafFiles(path.join(dirPath, entry.name)))
     ];
+}
+
+const MONTHLY_DUMP_FILE_TYPES = [
+    'token_transfers',
+    'transactions',
+    'receipts',
+    'contracts',
+    'blocks',
+    'tokens',
+    'logs'
+];
+
+function getMonthlyDumpFileNames(folderName) {
+    return {
+        blocks: `blocks${folderName}.csv`,
+        transactions: `transactions${folderName}.csv`,
+        receipts: `receipts${folderName}.csv`,
+        logs: `logs${folderName}.csv`,
+        contracts: `contracts${folderName}.csv`,
+        tokens: `tokens${folderName}.csv`,
+        token_transfers: `token_transfers${folderName}.csv`
+    };
+}
+
+function detectDumpFileType(fileName) {
+    for (const type of MONTHLY_DUMP_FILE_TYPES) {
+        if (fileName === type || fileName.startsWith(`${type}_`)) {
+            return type;
+        }
+    }
+
+    return null;
+}
+
+function normalizeMonthlyDumpOutputs(rawOutputDir, outputDir, folderName) {
+    const rawFiles = collectLeafFiles(rawOutputDir)
+        .filter(filePath => path.extname(filePath).toLowerCase() === '.csv');
+    const expectedFiles = getMonthlyDumpFileNames(folderName);
+    const matchedFiles = new Map();
+
+    for (const rawFile of rawFiles) {
+        const detectedType = detectDumpFileType(path.parse(rawFile).name);
+        if (!detectedType || matchedFiles.has(detectedType)) {
+            continue;
+        }
+
+        matchedFiles.set(detectedType, rawFile);
+    }
+
+    const missingTypes = Object.keys(expectedFiles).filter(type => !matchedFiles.has(type));
+    if (missingTypes.length > 0) {
+        throw new Error(`Dump incompleto gerado pelo ethereum-etl. Tipos ausentes: ${missingTypes.join(', ')}.`);
+    }
+
+    const normalizedPaths = [];
+
+    for (const [type, targetFileName] of Object.entries(expectedFiles)) {
+        const normalizedPath = path.join(outputDir, targetFileName);
+        fs.copyFileSync(matchedFiles.get(type), normalizedPath);
+        normalizedPaths.push(normalizedPath);
+    }
+
+    fs.rmSync(rawOutputDir, { recursive: true, force: true });
+
+    return normalizedPaths.sort((a, b) => a.localeCompare(b));
 }
 
 function buildPublishedDumpFileName(sourceFilePath, folderName) {
@@ -676,40 +798,26 @@ async function selectIncidentsFile(baseDir, folderName) {
 }
 
 function collectIndicatorFilesForPublication(monthDir) {
-    const sources = [
-        { sourceDir: path.join(monthDir, 'lab'), prefix: 'lab' },
-        { sourceDir: path.join(monthDir, 'prd'), prefix: 'prd' }
-    ];
     const items = [];
-    const tempDir = path.join(monthDir, 'prd', 'temp');
-    const resultRootDir = path.join(__dirname, 'result');
-    const metadataFiles = ['nodes_lab.json', 'nodes_piloto.json'];
+    const filePlans = [
+        { sourceFilePath: path.join(monthDir, 'lab', 'Blocos_lab.csv'), relativeSourcePath: path.join('lab', 'Blocos_lab.csv') },
+        { sourceFilePath: path.join(monthDir, 'prd', 'Blocos.csv'), relativeSourcePath: path.join('prd', 'Blocos.csv') },
+        { sourceFilePath: path.join(monthDir, 'prd', 'Blocos-estat.txt'), relativeSourcePath: path.join('prd', 'Blocos-estat.txt') },
+        { sourceFilePath: path.join(monthDir, 'Incidentes.csv'), relativeSourcePath: 'Incidentes.csv' },
+        { sourceFilePath: path.join(monthDir, 'Comentarios.csv'), relativeSourcePath: 'Comentarios.csv' },
+        { sourceFilePath: path.join(monthDir, 'nodes_lab.json'), relativeSourcePath: 'nodes_lab.json' },
+        { sourceFilePath: path.join(monthDir, 'nodes_piloto.json'), relativeSourcePath: 'nodes_piloto.json' }
+    ];
 
-    for (const source of sources) {
-        if (!fs.existsSync(source.sourceDir)) {
-            continue;
-        }
-
-        const files = collectLeafFiles(source.sourceDir).filter(filePath => !filePath.startsWith(`${tempDir}${path.sep}`));
-        for (const filePath of files) {
-            items.push({
-                sourceFilePath: filePath,
-                targetFileName: path.basename(filePath),
-                relativeSourcePath: path.relative(monthDir, filePath)
-            });
-        }
-    }
-
-    for (const metadataFile of metadataFiles) {
-        const sourceFilePath = path.join(resultRootDir, metadataFile);
-        if (!fs.existsSync(sourceFilePath)) {
+    for (const plan of filePlans) {
+        if (!fs.existsSync(plan.sourceFilePath)) {
             continue;
         }
 
         items.push({
-            sourceFilePath,
-            targetFileName: metadataFile,
-            relativeSourcePath: metadataFile
+            sourceFilePath: plan.sourceFilePath,
+            targetFileName: path.basename(plan.sourceFilePath),
+            relativeSourcePath: plan.relativeSourcePath
         });
     }
 
@@ -746,7 +854,7 @@ function getMenuHelpText(option) {
             '- Usuario SSH: valor de USERNAME ou USER do sistema.',
             '- Pasta default de saida em Lab: result\\dump\\lab\\AAAA-MM.',
             '- Pasta default de saida em Prd: result\\dump\\prd\\AAAA-MM.',
-            '- Nome default do arquivo gerado: blocksAAAA-MM.csv.',
+            '- Nomes default dos arquivos gerados: blocksAAAA-MM.csv, transactionsAAAA-MM.csv, receiptsAAAA-MM.csv, logsAAAA-MM.csv, contractsAAAA-MM.csv, tokensAAAA-MM.csv e token_transfersAAAA-MM.csv.',
             '',
             'Origem dos dados de entrada:',
             '- Os endpoints de Lab e Prd vem de config.json, no objeto SSH.',
@@ -754,7 +862,7 @@ function getMenuHelpText(option) {
             '- A consulta aos blocos e feita no node blockchain acessado via tunel SSH local em http://127.0.0.1:8545.',
             '',
             'Saidas geradas:',
-            '- Diretorio result\\dump\\prd\\AAAA-MM ou result\\dump\\lab\\AAAA-MM contendo o arquivo blocksAAAA-MM.csv exportado pelo ethereum-etl.',
+            '- Diretorio result\\dump\\prd\\AAAA-MM ou result\\dump\\lab\\AAAA-MM contendo os 7 arquivos mensais normalizados: blocksAAAA-MM.csv, transactionsAAAA-MM.csv, receiptsAAAA-MM.csv, logsAAAA-MM.csv, contractsAAAA-MM.csv, tokensAAAA-MM.csv e token_transfersAAAA-MM.csv.',
             '- O intervalo de blocos calculado e exibido na tela antes da exportacao.'
         ],
         '2': [
@@ -773,13 +881,13 @@ function getMenuHelpText(option) {
             '- Pasta default de origem em Prd: result\\dump\\prd\\AAAA-MM.',
             '- Pasta default de destino em Lab: DUMP_RBB_LAB_BASE_DIR\\AAAA-MM.',
             '- Pasta default de destino em Prd: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM.',
-            '- Nome default dos arquivos publicados: tipoAAAA-MM.csv, como blocksAAAA-MM.csv.',
+            '- Nome default dos arquivos publicados: tipoAAAA-MM.csv, como blocksAAAA-MM.csv, transactionsAAAA-MM.csv e token_transfersAAAA-MM.csv.',
             '',
             'Origem dos dados de entrada:',
             '- O sistema procura localmente por result\\dump\\prd\\AAAA-MM e result\\dump\\lab\\AAAA-MM.',
             '- Os destinos de rede sao lidos de config.json nas chaves DUMP_RBB_PRD_BASE_DIR e DUMP_RBB_LAB_BASE_DIR.',
             '- Se a pasta de destino do mes nao existir na rede, ela sera criada antes da copia.',
-            '- O sistema copia apenas os arquivos efetivamente presentes no dump local, sem assumir o conjunto completo do ethereum-etl.',
+            '- O sistema varre recursivamente o dump local do mes e copia apenas os arquivos efetivamente presentes, sem lista fixa de subpastas.',
             '',
             'Saidas geradas:',
             '- Copia do dump de Prd para DUMP_RBB_PRD_BASE_DIR\\AAAA-MM, se existir localmente, com os arquivos levados para a raiz da pasta de destino.',
@@ -801,7 +909,7 @@ function getMenuHelpText(option) {
             'Valores default:',
             '- Mes de referencia: mes anterior ao atual.',
             '- Usuario SSH: valor de USERNAME ou USER do sistema.',
-            '- Pasta default para os metadados nodes.json: result.',
+            '- Pasta default para os metadados nodes.json: result\\AAAA-MM.',
             '- Arquivos de metadados usados: nodes_lab.json e nodes_piloto.json.',
             '- Pasta default de saida em Lab: result\\AAAA-MM\\lab.',
             '- Pasta default de saida em Prd: result\\AAAA-MM\\prd.',
@@ -811,7 +919,7 @@ function getMenuHelpText(option) {
             'Origem dos dados de entrada:',
             '- Configuracoes Lab e Prd sao lidas de config.json, no objeto SSH.',
             '- O provider usado pelo processamento e http://localhost:8545, exposto pelo tunel SSH.',
-            '- Os arquivos nodes_lab.json e nodes_piloto.json sao resolvidos na pasta result antes da abertura do tunel SSH; se nao existirem localmente, ou se o usuario optar por sobrescrever, eles sao baixados do repositorio GitHub RBBNet/participantes.',
+            '- Os arquivos nodes_lab.json e nodes_piloto.json sao resolvidos na pasta result\\AAAA-MM antes da abertura do tunel SSH; se nao existirem localmente, ou se o usuario optar por sobrescrever, eles sao baixados do repositorio GitHub RBBNet/participantes.',
             '- O mes informado e convertido internamente no intervalo completo entre o primeiro e o ultimo dia do mes.',
             '',
             'Saidas geradas:',
@@ -828,30 +936,69 @@ function getMenuHelpText(option) {
             'Entradas solicitadas:',
             '- Mes de referencia no formato MM.',
             '- Ano de referencia no formato AAAA.',
-            '- Caminho do arquivo CSV de blocos.',
+            '- Ambiente: Lab ou Prd.',
+            '- Confirmacao da origem do arquivo de blocos escolhida automaticamente.',
             '',
             'Valores default:',
             '- Mes: mes anterior ao atual.',
             '- Ano: ano correspondente ao mes anterior.',
-            '- Pasta default de origem do CSV de blocos: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM.',
+            '- Pasta prioritaria de origem em Lab: result\\dump\\lab\\AAAA-MM.',
+            '- Pasta prioritaria de origem em Prd: result\\dump\\prd\\AAAA-MM.',
+            '- Pasta de fallback na rede em Lab: DUMP_RBB_LAB_BASE_DIR\\AAAA-MM.',
+            '- Pasta de fallback na rede em Prd: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM.',
             '- Nome default do arquivo de entrada: blocksAAAA-MM.csv.',
-            '- Caminho default completo de entrada: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM\\blocksAAAA-MM.csv, montado a partir do mes e ano informados.',
-            '- Pasta default do arquivo temporario: result\\AAAA-MM\\prd\\temp.',
-            '- Nome default do arquivo temporario: blocksAAAA-MM.csv.',
-            '- Pasta default da saida final: result\\AAAA-MM\\prd.',
+            '- Pasta local de cache quando a origem for a rede em Lab: result\\dump\\lab\\AAAA-MM.',
+            '- Pasta local de cache quando a origem for a rede em Prd: result\\dump\\prd\\AAAA-MM.',
+            '- Pasta default da saida final em Lab: result\\AAAA-MM\\lab.',
+            '- Pasta default da saida final em Prd: result\\AAAA-MM\\prd.',
             '- Nome default do arquivo de saida final: Blocos-estat.txt.',
             '',
             'Origem dos dados de entrada:',
-            '- O arquivo de origem e um CSV de blocos localizado na rede corporativa, no caminho informado pelo usuario.',
-            '- O usuario pode alterar o caminho de entrada manualmente, mas o default da execucao e conhecido a partir de DUMP_RBB_PRD_BASE_DIR, do mes e do ano informados.',
-            '- Esse arquivo e copiado para result\\AAAA-MM\\prd\\temp antes do processamento.',
+            '- O sistema procura primeiro o arquivo blocksAAAA-MM.csv na pasta local result\\dump\\{lab|prd}\\AAAA-MM do ambiente escolhido.',
+            '- Se nao encontrar localmente, procura o mesmo arquivo na pasta de rede DUMP_RBB_LAB_BASE_DIR ou DUMP_RBB_PRD_BASE_DIR, conforme o ambiente.',
+            '- Em ambos os casos, o terminal informa a origem selecionada e pede confirmacao antes de continuar.',
+            '- Quando a origem for a rede, o arquivo e copiado para result\\dump\\{lab|prd}\\AAAA-MM antes do processamento.',
             '',
             'Saidas geradas:',
-            '- Arquivo temporario local em result\\AAAA-MM\\prd\\temp\\blocksAAAA-MM.csv.',
-            '- Arquivo result\\AAAA-MM\\prd\\Blocos-estat.txt com as estatisticas geradas por Blocks\\block-analytics.js.'
+            '- Se necessario, copia local do arquivo de blocos em result\\dump\\{lab|prd}\\AAAA-MM\\blocksAAAA-MM.csv.',
+            '- Arquivo result\\AAAA-MM\\{lab|prd}\\Blocos-estat.txt com as estatisticas geradas por Blocks\\block-analytics.js.'
         ],
         '5': [
-            'Opcao 5 - Issues em Producao',
+            'Opcao 5 - Votos de Consenso por extraData',
+            '',
+            'Objetivo:',
+            'Examina o arquivo mensal de blocos do ambiente selecionado e registra os votos de inclusao ou exclusao de consenso observados diretamente no campo extra_data dos blocos.',
+            '',
+            'Entradas solicitadas:',
+            '- Mes de referencia no formato MM/AAAA.',
+            '- Ambiente: Lab ou Prd.',
+            '- Confirmacao da origem do arquivo de blocos escolhida automaticamente.',
+            '',
+            'Valores default:',
+            '- Mes de referencia: mes anterior ao atual.',
+            '- Pasta prioritaria de origem em Lab: result\\dump\\lab\\AAAA-MM.',
+            '- Pasta prioritaria de origem em Prd: result\\dump\\prd\\AAAA-MM.',
+            '- Pasta de fallback na rede em Lab: DUMP_RBB_LAB_BASE_DIR\\AAAA-MM.',
+            '- Pasta de fallback na rede em Prd: DUMP_RBB_PRD_BASE_DIR\\AAAA-MM.',
+            '- Nome default do arquivo de entrada: blocksAAAA-MM.csv.',
+            '- Pasta local de cache quando a origem for a rede em Lab: result\\dump\\lab\\AAAA-MM.',
+            '- Pasta local de cache quando a origem for a rede em Prd: result\\dump\\prd\\AAAA-MM.',
+            '- Pasta default de saida: result\\AAAA-MM.',
+            '- Nome default do arquivo gerado em Lab: Votos-consenso-lab.csv.',
+            '- Nome default do arquivo gerado em Prd: Votos-consenso-prd.csv.',
+            '',
+            'Origem dos dados de entrada:',
+            '- O sistema procura primeiro blocksAAAA-MM.csv na pasta local de dump do ambiente.',
+            '- Se nao encontrar localmente, procura o mesmo arquivo na pasta de rede correspondente ao ambiente e, se confirmado pelo usuario, copia para o dump local antes da analise.',
+            '- O parser usa os campos number, timestamp, miner e extra_data do CSV de blocos e decodifica o extra_data via RLP para procurar votos observados no cabecalho dos blocos.',
+            '- Os metadados nodes_lab.json e nodes_piloto.json sao resolvidos em result\\AAAA-MM antes da analise; se nao existirem localmente, o sistema tenta baixa-los do repositorio GitHub RBBNet/participantes.',
+            '',
+            'Saidas geradas:',
+            '- Arquivo CSV mensal em result\\AAAA-MM\\Votos-consenso-lab.csv ou result\\AAAA-MM\\Votos-consenso-prd.csv, contendo apenas blocos com voto observado e datas formatadas em horario de Brasilia.',
+            '- Logs no terminal informando origem do dump, quantidade de votos observados e caminho final do CSV.'
+        ],
+        '6': [
+            'Opcao 6 - Issues em Producao',
             '',
             'Objetivo:',
             'Consulta a API do GitHub para coletar e consolidar issues de producao do repositorio RBBNet/incidentes.',
@@ -861,22 +1008,22 @@ function getMenuHelpText(option) {
             '',
             'Valores default:',
             '- Mes de referencia: mes anterior ao atual.',
-            '- Pasta default de saida: result\\AAAA-MM\\prd.',
+            '- Pasta default de saida: result\\AAAA-MM.',
             '- Nome default do arquivo de saida: Incidentes.csv.',
-            '- Caminho default completo de saida: result\\AAAA-MM\\prd\\Incidentes.csv.',
+            '- Caminho default completo de saida: result\\AAAA-MM\\Incidentes.csv.',
             '',
             'Origem dos dados de entrada:',
             '- O script Issues\\issue-metrics.js usa o token GITHUB_RBB_TOKEN do config.json para consultar a API do GitHub.',
-            '- As issues sao buscadas no repositorio RBBNet/incidentes com filtro de producao (PRD).',
-            '- O mes informado e convertido internamente no intervalo completo entre o primeiro e o ultimo dia do mes.',
+            '- As issues sao buscadas no repositorio RBBNet/incidentes com a label PRD combinada com uma das labels: incidente, incidente-critico, vulnerabilidade ou vulnerabilidade-critica.',
+            '- O mes informado e convertido internamente no intervalo completo entre o primeiro dia do mes e o primeiro dia do mes seguinte, considerando apenas issues fechadas nesse periodo.',
             '- Se configurado, PROXY_URL em config.json e usado nas chamadas HTTP ao GitHub.',
             '',
             'Saidas geradas:',
-            '- Arquivo result\\AAAA-MM\\prd\\Incidentes.csv com os incidentes coletados no GitHub para o mes selecionado.',
+            '- Arquivo result\\AAAA-MM\\Incidentes.csv com os incidentes coletados no GitHub para o mes selecionado.',
             '- Logs do processamento mostrados no terminal.'
         ],
-        '6': [
-            'Opcao 6 - Publicar indicadores na pasta final',
+        '7': [
+            'Opcao 7 - Publicar indicadores na pasta final',
             '',
             'Objetivo:',
             'Copia os indicadores finais do mes selecionado da pasta local result para a pasta final em INDICADORES_BASE_DIR.',
@@ -888,23 +1035,20 @@ function getMenuHelpText(option) {
             'Valores default:',
             '- Mes de referencia: mes anterior ao atual.',
             '- Pasta default de origem local: result\\AAAA-MM.',
-            '- Pastas locais consideradas: result\\AAAA-MM\\lab e result\\AAAA-MM\\prd.',
-            '- Arquivos auxiliares adicionais publicados a partir da raiz de result: nodes_lab.json e nodes_piloto.json.',
-            '- Pasta ignorada na publicacao: result\\AAAA-MM\\prd\\temp.',
+            '- Pastas locais consideradas: result\\AAAA-MM\\lab, result\\AAAA-MM\\prd e a raiz result\\AAAA-MM.',
+            '- Arquivos da raiz mensal considerados na publicacao: Incidentes.csv, Comentarios.csv, nodes_lab.json e nodes_piloto.json.',
             '- Pasta default de destino final: INDICADORES_BASE_DIR\\AAAA-MM.',
             '',
             'Origem dos dados de entrada:',
-            '- O sistema procura arquivos finais em result\\AAAA-MM\\lab e result\\AAAA-MM\\prd.',
-            '- O sistema tambem procura, na raiz de result, os arquivos nodes_lab.json e nodes_piloto.json para publicar junto com os indicadores do mes.',
-            '- A pasta result\\AAAA-MM\\prd\\temp e excluida por conter apenas artefatos temporarios.',
+            '- O sistema procura os arquivos finais do menu Operacao em result\\AAAA-MM\\lab, result\\AAAA-MM\\prd e na raiz result\\AAAA-MM.',
             '- Os arquivos existentes em INDICADORES_BASE_DIR\\AAAA-MM, quando houver, sao listados antes da confirmacao.',
             '',
             'Saidas geradas:',
-            '- Copia plana dos arquivos finais e dos metadados nodes_*.json para a raiz de INDICADORES_BASE_DIR\\AAAA-MM.',
+            '- Copia plana para a raiz de INDICADORES_BASE_DIR\\AAAA-MM de: Blocos_lab.csv, Blocos.csv, Blocos-estat.txt, Incidentes.csv, Comentarios.csv, nodes_lab.json e nodes_piloto.json, quando existirem localmente.',
             '- Logs no terminal mostrando a lista local, a lista do destino e o total de arquivos copiados.'
         ],
-        '7': [
-            'Opcao 7 - Gerar HTML Operacional',
+        '8': [
+            'Opcao 8 - Gerar HTML Operacional',
             '',
             'Objetivo:',
             'Gera um HTML consolidado com indicadores operacionais para todos os meses do intervalo informado.',
@@ -921,10 +1065,10 @@ function getMenuHelpText(option) {
             '- Nomes default dos arquivos mensais lidos em Prd: Blocos.csv e Blocos-estat.txt.',
             '- Nome default do arquivo mensal lido em Lab: Blocos_lab.csv.',
             '- Chave default de configuracao dos OLAs: BLOCK_PRODUCTION_OLA_THRESHOLDS no config.json.',
-            '- Pasta default do arquivo de incidentes: INDICADORES_BASE_DIR\\AAAA-MM-final.',
+            '- Pasta default do arquivo de incidentes: INDICADORES_BASE_DIR\\AAAA-MM.',
             '- Nome default do arquivo de incidentes: Incidentes.csv.',
             '- Pasta default de saida local: result\\AAAA-MM-final.',
-            '- Pasta default de saida final: INDICADORES_BASE_DIR\\AAAA-MM-final.',
+            '- Pasta default de saida final: INDICADORES_BASE_DIR\\AAAA-MM.',
             '- Nome default do arquivo de saida: Indicadores-operacao.html.',
             '',
             'Origem dos dados de entrada:',
@@ -932,7 +1076,7 @@ function getMenuHelpText(option) {
             '- Quando existir no mesmo mes, o arquivo Blocos_lab.csv tambem e lido para gerar a tabela equivalente de producao de Lab.',
             '- A coloracao das celulas de producao por partícipe usa os limiares de BLOCK_PRODUCTION_OLA_THRESHOLDS no config.json, escolhendo a faixa pela quantidade de validadores/partícipes presente no CSV do ambiente e do mes.',
             '- Esses arquivos mensais sao lidos da pasta definida em config.json pela chave INDICADORES_BASE_DIR, normalmente em subpastas no formato AAAA-MM.',
-            '- Se existir, o arquivo INDICADORES_BASE_DIR\\AAAA-MM-final\\Incidentes.csv do ultimo mes da faixa e incluido como entrada adicional.',
+            '- Se existir, o arquivo INDICADORES_BASE_DIR\\AAAA-MM\\Incidentes.csv do ultimo mes da faixa e incluido como entrada adicional.',
             '- Se esse arquivo nao existir, o HTML e gerado sem incidentes e o aviso aparece no terminal.',
             '- Se faltar Blocos.csv ou Blocos-estat.txt em algum mes do intervalo, esse mes e ignorado na consolidacao.',
             '- Se faltar Blocos_lab.csv em algum mes, apenas a linha correspondente de Lab fica sem dados para aquele mes, sem impedir a geracao do HTML.',
@@ -940,16 +1084,16 @@ function getMenuHelpText(option) {
             '',
             'Saidas geradas:',
             '- Arquivo result\\AAAA-MM-final\\Indicadores-operacao.html gerado localmente por Blocks\\block-report.js.',
-            '- Copia do mesmo HTML para INDICADORES_BASE_DIR\\AAAA-MM-final\\Indicadores-operacao.html.'
+            '- Copia do mesmo HTML para INDICADORES_BASE_DIR\\AAAA-MM\\Indicadores-operacao.html.'
         ],
-        '8': [
-            'Opcao 8 - Help',
+        '9': [
+            'Opcao 9 - Help',
             '',
             'Objetivo:',
             'Permite escolher uma opcao do menu e ver a descricao detalhada de funcionamento, entradas, defaults e saidas.'
         ],
-        '9': [
-            'Opcao 9 - Sair',
+        '10': [
+            'Opcao 10 - Sair',
             '',
             'Objetivo:',
             'Fecha o menu operacional, encerra a interface readline e finaliza o processo.'
@@ -966,13 +1110,14 @@ async function showHelpMenu() {
     console.log('2. Publica dump RBB para pasta de infra');
     console.log('3. Proposicao de Blocos por Participe');
     console.log('4. Estatisticas do Tempo de Producao de Blocos');
-    console.log('5. Issues em Producao');
-    console.log('6. Publicar indicadores na pasta final');
-    console.log('7. Gerar HTML Operacional');
-    console.log('8. Help');
-    console.log('9. Sair');
+    console.log('5. Votos de Consenso por extraData');
+    console.log('6. Issues em Producao');
+    console.log('7. Publicar indicadores na pasta final');
+    console.log('8. Gerar HTML Operacional');
+    console.log('9. Help');
+    console.log('10. Sair');
 
-    const option = await question('Qual opcao deseja detalhar (1-9)? ');
+    const option = await question('Qual opcao deseja detalhar (1-10)? ');
     const helpText = getMenuHelpText(option.trim());
 
     if (!helpText) {
@@ -994,14 +1139,15 @@ async function showMenu() {
     console.log('2. Publica dump RBB para pasta de infra');
     console.log('3. Proposicao de Blocos por Participe');
     console.log('4. Estatisticas do Tempo de Producao de Blocos');
-    console.log('5. Issues em Producao');
-    console.log('6. Publicar indicadores na pasta final');
-    console.log('7. Gerar HTML Operacional');
-    console.log('8. Help');
-    console.log('9. Sair');
+    console.log('5. Votos de Consenso por extraData');
+    console.log('6. Issues em Producao');
+    console.log('7. Publicar indicadores na pasta final');
+    console.log('8. Gerar HTML Operacional');
+    console.log('9. Help');
+    console.log('10. Sair');
     console.log('==========================================');
 
-    const choice = await question('Escolha uma opcao (1-9): ');
+    const choice = await question('Escolha uma opcao (1-10): ');
 
     try {
         switch (choice.trim()) {
@@ -1018,18 +1164,21 @@ async function showMenu() {
                 await blockAnalytics();
                 break;
             case '5':
-                await issueMetrics();
+                await blockConsensusVotes();
                 break;
             case '6':
-                await publishIndicatorsToFinalFolder();
+                await issueMetrics();
                 break;
             case '7':
-                await operationalHtmlReport();
+                await publishIndicatorsToFinalFolder();
                 break;
             case '8':
-                await showHelpMenu();
+                await operationalHtmlReport();
                 break;
             case '9':
+                await showHelpMenu();
+                break;
+            case '10':
                 console.log('Saindo...');
                 rl.close();
                 process.exit(0);
@@ -1073,7 +1222,7 @@ async function blockMetrics() {
         return;
     }
 
-    const resultDir = path.join(__dirname, 'result');
+    const resultDir = path.join(__dirname, 'result', monthRange.folderName);
     try {
         await ensureNodesFiles(resultDir);
     } catch (error) {
@@ -1124,30 +1273,64 @@ async function blockAnalytics() {
 
     const refMonth = await questionWithDefault('Digite o mes de referencia (MM)', defaultMonth);
     const refYear = await questionWithDefault('Digite o ano de referencia (AAAA)', defaultYear);
-    const folderName = `${refYear}-${refMonth}`;
-    const defaultPath = path.join(
-        config.DUMP_RBB_PRD_BASE_DIR,
-        folderName,
-        `blocks${folderName}.csv`
-    );
-    const blocksPath = await questionWithDefault('Arquivo de blocos', defaultPath);
 
-    console.log('\nVerificando se o arquivo existe...');
-    if (!fs.existsSync(blocksPath)) {
-        console.log(`ERRO: Arquivo nao encontrado: ${blocksPath}`);
+    let environment;
+    try {
+        environment = await selectRbbEnvironment();
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
         await pause();
         return;
     }
 
-    console.log('Arquivo encontrado. Copiando para pasta local...');
-    const outputDir = path.join(__dirname, 'result', folderName, 'prd');
-    const tempDir = path.join(outputDir, 'temp');
-    const localPath = path.join(tempDir, `blocks${folderName}.csv`);
+    const folderName = `${refYear}-${refMonth}`;
+    let blockSource;
 
     try {
-        ensureDir(tempDir);
-        await copyFile(blocksPath, localPath);
-        console.log('Copia concluida. Processando estatisticas...');
+        blockSource = resolveBlockAnalyticsSource(environment, folderName);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    if (blockSource.originType === 'missing') {
+        console.log('\nERRO: Arquivo de blocos nao encontrado.');
+        console.log(`Origem local verificada: ${blockSource.localPath}`);
+        console.log(`Origem de rede verificada: ${blockSource.networkPath}`);
+        await pause();
+        return;
+    }
+
+    console.log(`\nAmbiente selecionado: ${environment.envLabel}`);
+    console.log(`Origem escolhida: ${blockSource.originLabel}`);
+    console.log(`Arquivo de blocos: ${blockSource.sourcePath}`);
+
+    if (blockSource.originType === 'network') {
+        console.log(`Destino da copia local: ${blockSource.localPath}`);
+    }
+
+    const confirmation = await questionWithDefault('Confirmar uso desta origem? (s/n)', 'n');
+    if (confirmation.trim().toLowerCase() !== 's') {
+        console.log('Processamento cancelado pelo usuario.');
+        await pause();
+        return;
+    }
+
+    const outputDir = path.join(__dirname, 'result', folderName, environment.envSlug);
+    const localPath = blockSource.localPath;
+
+    try {
+        if (blockSource.originType === 'network') {
+            ensureDir(blockSource.localDir);
+            console.log('\nCopiando arquivo da rede para a pasta local de dump...');
+            await copyFile(blockSource.sourcePath, localPath);
+            console.log(`Copia concluida: ${localPath}`);
+        } else {
+            console.log('\nUsando arquivo local ja existente no dump.');
+        }
+
+        console.log('Processando estatisticas...');
 
         ensureDir(outputDir);
         const outputPath = path.join(outputDir, 'Blocos-estat.txt');
@@ -1173,8 +1356,100 @@ async function blockAnalytics() {
 
         console.log('\nProcessamento concluido!');
         console.log(`Resultado salvo em: ${outputPath}`);
-        console.log(`Arquivo temporario: ${localPath}`);
+        console.log(`Arquivo de blocos utilizado: ${localPath}`);
         console.log();
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+    }
+
+    await pause();
+}
+
+async function blockConsensusVotes() {
+    console.log('\n--- Votos de Consenso por extraData ---\n');
+
+    const defaultPeriod = getDefaultMonthPeriod();
+    const referencePeriod = await questionWithDefault('Digite o mes de referencia (MM/AAAA)', defaultPeriod);
+
+    let monthRange;
+    try {
+        monthRange = getMonthDateRange(referencePeriod);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    let environment;
+    try {
+        environment = await selectRbbEnvironment();
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    let blockSource;
+    try {
+        blockSource = resolveMonthlyDumpSource(environment, monthRange.folderName, `blocks${monthRange.folderName}.csv`);
+    } catch (error) {
+        console.log(`ERRO: ${error.message}`);
+        await pause();
+        return;
+    }
+
+    if (blockSource.originType === 'missing') {
+        console.log('\nERRO: Arquivo de blocos nao encontrado.');
+        console.log(`Origem local verificada: ${blockSource.localPath}`);
+        console.log(`Origem de rede verificada: ${blockSource.networkPath}`);
+        await pause();
+        return;
+    }
+
+    console.log(`\nAmbiente selecionado: ${environment.envLabel}`);
+    console.log(`Origem escolhida: ${blockSource.originLabel}`);
+    console.log(`Arquivo de blocos: ${blockSource.sourcePath}`);
+
+    if (blockSource.originType === 'network') {
+        console.log(`Destino da copia local: ${blockSource.localPath}`);
+    }
+
+    const confirmation = await questionWithDefault('Confirmar uso desta origem? (s/n)', 'n');
+    if (confirmation.trim().toLowerCase() !== 's') {
+        console.log('Processamento cancelado pelo usuario.');
+        await pause();
+        return;
+    }
+
+    const monthDir = path.join(__dirname, 'result', monthRange.folderName);
+    const outputFileName = `Votos-consenso-${environment.envSlug}.csv`;
+    const outputPath = path.join(monthDir, outputFileName);
+
+    try {
+        await ensureNodesFiles(monthDir);
+
+        if (blockSource.originType === 'network') {
+            ensureDir(blockSource.localDir);
+            console.log('\nCopiando arquivo da rede para a pasta local de dump...');
+            await copyFile(blockSource.sourcePath, blockSource.localPath);
+            console.log(`Copia concluida: ${blockSource.localPath}`);
+        } else {
+            console.log('\nUsando arquivo local ja existente no dump.');
+        }
+
+        ensureDir(monthDir);
+        console.log('Processando votos observados no extra_data...');
+
+        await runNode(path.join(__dirname, 'Blocks', 'block-consensus-votes.js'), [
+            blockSource.localPath,
+            monthDir,
+            environment.envSlug,
+            outputPath
+        ]);
+
+        console.log('\nProcessamento concluido!');
+        console.log(`Arquivo de votos gerado em: ${outputPath}`);
+        console.log(`Arquivo de blocos utilizado: ${blockSource.localPath}`);
     } catch (error) {
         console.log(`ERRO: ${error.message}`);
     }
@@ -1270,7 +1545,7 @@ async function dumpRbbToLocalFolder() {
     const username = await questionWithDefault('Usuario SSH', defaultUsername);
     const providerUri = 'http://127.0.0.1:8545';
     const outputDir = path.join(__dirname, 'result', 'dump', environment.envSlug, monthRange.folderName);
-    const outputPath = path.join(outputDir, `blocks${monthRange.folderName}.csv`);
+    const rawOutputDir = path.join(outputDir, '_ethereumetl_raw');
     const totalStages = 4;
 
     try {
@@ -1305,26 +1580,30 @@ async function dumpRbbToLocalFolder() {
         console.log(`Mes de referencia: ${monthRange.folderName}`);
         console.log(`Bloco inicial: ${startBlock}`);
         console.log(`Bloco final: ${endBlock}`);
-        console.log(`Arquivo de saida: ${outputPath}\n`);
+        console.log(`Pasta de saida: ${outputDir}\n`);
 
         logStage(3, totalStages, 'Exportando dump com ethereum-etl');
         resetDir(outputDir);
-        console.log('Iniciando exportacao com ethereum-etl. Isso pode levar varios minutos.');
+        console.log('Iniciando exportacao completa com ethereum-etl. Isso pode levar varios minutos.');
 
         await runCommand('ethereumetl', [
-            'export_blocks_and_transactions',
-            '--start-block', String(startBlock),
-            '--end-block', String(endBlock),
+            'export_all',
+            '--start', String(startBlock),
+            '--end', String(endBlock),
+            '--partition-batch-size', String(endBlock - startBlock + 1),
             '--provider-uri', providerUri,
-            '--blocks-output', outputPath
+            '--output-dir', rawOutputDir
         ], {
-            progressLabel: 'Exportacao de blocos em andamento',
+            progressLabel: 'Exportacao completa em andamento',
             progressIntervalMs: 20000
         });
 
+        const normalizedOutputPaths = normalizeMonthlyDumpOutputs(rawOutputDir, outputDir, monthRange.folderName);
+
         logStage(4, totalStages, 'Finalizando dump local');
         console.log('\nDump concluido com sucesso!');
-        console.log(`Arquivo salvo em: ${outputPath}`);
+        console.log(`Pasta preparada: ${outputDir}`);
+        printFileList('Arquivos gerados:', normalizedOutputPaths.map(filePath => path.basename(filePath)));
     } catch (error) {
         console.log(`\nERRO: ${error.message}`);
         console.log('Verifique suas credenciais SSH, conectividade e se o pacote ethereum-etl esta instalado.');
@@ -1437,7 +1716,7 @@ async function publishIndicatorsToFinalFolder() {
     const targetDir = path.join(targetBaseDir, folderName);
     const itemsToPublish = collectIndicatorFilesForPublication(sourceMonthDir);
     const recommendedMetadataFiles = ['nodes_lab.json', 'nodes_piloto.json'];
-    const missingMetadataFiles = recommendedMetadataFiles.filter(fileName => !fs.existsSync(path.join(__dirname, 'result', fileName)));
+    const missingMetadataFiles = recommendedMetadataFiles.filter(fileName => !fs.existsSync(path.join(sourceMonthDir, fileName)));
 
     if (itemsToPublish.length === 0) {
         console.log(`Nenhum arquivo publicavel encontrado em ${sourceMonthDir}.`);
